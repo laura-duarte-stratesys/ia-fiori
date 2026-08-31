@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Generador de Jerarquías SAP · Asistente IA</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css" />
+<style>
+:root{
+  --blue:#1e80c3; --blue-dark:#12679e; --grey:#343a40; --muted:#6c757d;
+  --background:#f4f7fa; --surface:#fff; --border:#e1e7ed;
+  --danger:#cc0000; --success:#198754; --warning:#b7791f;
+  font-family:'Segoe UI',Arial,sans-serif;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--background);color:var(--grey);}
+.app-shell{max-width:1180px;margin:0 auto;padding:26px 20px 44px;}
+.app-header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:18px;}
+.brand{display:flex;gap:14px;align-items:center;}
+.brand-mark{width:44px;height:44px;border-radius:12px;background:var(--blue);color:#fff;display:grid;place-items:center;font-size:21px;}
+.eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--blue);}
+.app-header h1{margin:3px 0;font-size:23px;font-weight:650;}
+.app-header p{margin:0;color:var(--muted);font-size:12.5px;}
+.header-badge{display:flex;align-items:center;gap:7px;border:1px solid #cfe3f0;background:#eef8fd;color:var(--blue);padding:8px 12px;border-radius:20px;font-size:12px;font-weight:600;}
+.step-block{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:14px;box-shadow:0 2px 8px rgba(31,45,61,.025);}
+.step-title{display:flex;align-items:center;gap:11px;margin-bottom:16px;}
+.step-title h2{margin:0;font-size:15.5px;font-weight:650;}
+.step-title p{margin:3px 0 0;color:var(--muted);font-size:12px;}
+.step-num{width:26px;height:26px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:700;flex-shrink:0;}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+.field.full{grid-column:1/-1;}
+.field label{display:block;margin-bottom:6px;font-size:12px;color:#66717c;font-weight:600;}
+input,select,textarea{width:100%;height:38px;padding:8px 10px;border:1px solid #ccd5dd;border-radius:7px;background:#fff;color:var(--grey);outline:none;font-size:13px;font-family:inherit;}
+input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(30,128,195,.1);}
+.dropzone{min-height:100px;border:1.5px dashed #b9c8d4;border-radius:10px;background:#fafcfd;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;color:var(--muted);cursor:pointer;}
+.dropzone:hover{border-color:var(--blue);background:#f7fcff;}
+.dropzone i{font-size:23px;color:var(--blue);}
+.dropzone strong{font-size:13px;color:var(--grey);}
+.dropzone span{font-size:11px;}
+.file-hidden{display:none;}
+.status{margin-top:9px;font-size:12px;min-height:16px;}
+.status.error{color:var(--danger);}
+.status.success{color:var(--success);}
+.action-row{display:flex;justify-content:flex-end;gap:8px;margin-top:12px;}
+button.primary,button.secondary,button.ghost{border:0;border-radius:7px;padding:9px 14px;font-size:13px;display:inline-flex;align-items:center;gap:7px;cursor:pointer;}
+button.primary{background:var(--blue);color:#fff;}
+button.primary:hover{background:var(--blue-dark);}
+button.secondary{background:#eef6fb;color:var(--blue);border:1px solid #cce1ee;}
+button.secondary:hover{background:#e2f0f9;}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--border);}
+button:disabled{opacity:.45;cursor:not-allowed;}
+.summary-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:16px;}
+.summary-card{background:#f6f8fa;border:1px solid #e7ebef;border-radius:9px;padding:12px;}
+.summary-card .label{font-size:11px;color:var(--muted);margin-bottom:4px;}
+.summary-card .value{font-size:20px;font-weight:650;}
+h3{font-size:13px;margin:0 0 9px;}
+table{width:100%;border-collapse:collapse;font-size:11.5px;}
+th{background:#edf1f4;text-align:left;padding:8px;font-weight:650;position:sticky;top:0;}
+td{padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top;}
+.problem td{color:#7c1d1d;}
+.table-wrap{overflow:auto;max-height:340px;border:1px solid var(--border);border-radius:8px;}
+.success-msg{color:var(--success);font-size:13px;margin-top:12px;display:flex;align-items:center;gap:7px;}
+.hierarchy-tree{padding:6px 4px;max-height:480px;overflow:auto;border:1px solid var(--border);border-radius:8px;background:#fff;}
+.h-node-row{display:flex;align-items:center;min-height:34px;padding:4px 8px;border-radius:6px;}
+.h-node-row:hover{background:#f5f7f9;}
+.h-node-row.err{background:#fff5f5;border:1px solid #ffc9c9;}
+.h-toggle{width:22px;height:22px;border:none;background:transparent;color:#495057;cursor:pointer;font-size:11px;border-radius:4px;}
+.h-toggle.leaf{cursor:default;color:#adb5bd;}
+.h-icon{width:24px;flex-shrink:0;font-size:14px;}
+.h-id{min-width:90px;margin-right:10px;font-family:Consolas,monospace;font-size:12.5px;font-weight:600;}
+.h-desc{flex:1;font-size:13px;}
+.h-type{margin-left:10px;padding:3px 8px;border-radius:20px;background:#f1f3f5;color:#6c757d;font-size:10.5px;white-space:nowrap;}
+.h-children{margin-left:16px;padding-left:15px;border-left:1px solid #dee2e6;}
+.ai-card{border:1px solid #d7e7f1;border-radius:11px;background:#f8fcff;padding:15px;margin-top:14px;}
+.ai-title{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:650;color:var(--blue);margin-bottom:8px;}
+.ai-status-line{font-size:12px;color:var(--muted);margin-top:10px;min-height:16px;}
+.ai-status-line.success{color:var(--success);}
+.ai-progress-bar{height:6px;background:#e2eef5;border-radius:4px;overflow:hidden;margin-top:8px;}
+.ai-progress-fill{height:100%;background:var(--blue);transition:width .2s ease;}
+.change-row td:first-child{text-align:center;width:34px;}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10.5px;font-weight:600;}
+.badge.alta{background:#e6f5ec;color:var(--success);}
+.badge.media{background:#fff6e0;color:var(--warning);}
+.badge.baja{background:#f1f3f5;color:var(--muted);}
+.incident-badge{display:inline-block;padding:2px 7px;border-radius:5px;font-size:10.5px;background:#fdeaea;color:#a12626;font-weight:600;}
+footer{text-align:center;color:#89939d;font-size:10.5px;padding-top:10px;}
+.api-key-box{display:flex;gap:8px;align-items:flex-end;}
+.api-key-box .field{flex:1;}
+.small-note{font-size:11.5px;color:var(--muted);margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark"><i class="ti ti-hierarchy-2"></i></div>
+      <div>
+        <div class="eyebrow">SAP S/4HANA · Group Reporting</div>
+        <h1>Generador de Jerarquías + IA</h1>
+        <p>Sube tu Excel, valida la estructura y pide sugerencias a Claude directamente.</p>
+      </div>
+    </div>
+    <div class="header-badge"><i class="ti ti-sparkles"></i> Claude API directa</div>
+  </header>
+
+  <!-- STEP 0: API KEY -->
+  <section class="step-block">
+    <div class="step-title">
+      <span class="step-num">0</span>
+      <div>
+        <h2>Clave de API</h2>
+        <p>Se usa solo en tu navegador para llamar a la API de Claude. No se guarda en ningún servidor.</p>
+      </div>
+    </div>
+    <div class="api-key-box">
+      <div class="field full">
+        <label for="api-key">Anthropic API Key</label>
+        <input id="api-key" type="password" placeholder="sk-ant-..." />
+      </div>
+    </div>
+    <p class="small-note">Si estás probando esto dentro de un artefacto de Claude.ai, normalmente NO necesitas pegar tu clave: las llamadas a api.anthropic.com ya funcionan directamente. Si ves un error de autenticación, pega aquí tu clave de API.</p>
+  </section>
+
+  <!-- STEP 1: PARAMS -->
+  <section class="step-block">
+    <div class="step-title">
+      <span class="step-num">1</span>
+      <div>
+        <h2>Datos de la jerarquía</h2>
+        <p>Estos valores viajan al archivo Fiori generado.</p>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="field"><label for="f-id">ID de jerarquía</label><input id="f-id" value="Z_BS_PL" /></div>
+      <div class="field"><label for="f-desc">Descripción</label><input id="f-desc" value="Z_Estructura Balance y PyG" /></div>
+      <div class="field"><label for="f-inicio">Inicio de validez</label><input id="f-inicio" value="01.01.2026" /></div>
+      <div class="field"><label for="f-fin">Fin de validez</label><input id="f-fin" value="31.12.9999" /></div>
+      <div class="field full"><label for="f-coa">COA de consolidación</label><input id="f-coa" value="Y1" /></div>
+    </div>
+  </section>
+
+  <!-- STEP 2: FILE -->
+  <section class="step-block">
+    <div class="step-title">
+      <span class="step-num">2</span>
+      <div>
+        <h2>Archivo de entrada</h2>
+        <p>La hoja <strong>Input</strong> debe tener columna ID y Descripción (o B/C sin encabezado, formato VBA).</p>
+      </div>
+    </div>
+    <label class="dropzone" for="file-input">
+      <i class="ti ti-file-spreadsheet"></i>
+      <strong>Selecciona o arrastra tu Excel</strong>
+      <span>Formato .xlsx, .xlsm o .xls</span>
+    </label>
+    <input id="file-input" class="file-hidden" type="file" accept=".xlsx,.xlsm,.xls" />
+    <div id="file-status" class="status"></div>
+    <div class="action-row">
+      <button id="btn-process" class="primary" type="button" disabled><i class="ti ti-player-play"></i> Procesar y validar</button>
+    </div>
+  </section>
+
+  <!-- STEP 3: VALIDATION -->
+  <section id="step3" class="step-block" style="display:none">
+    <div class="step-title">
+      <span class="step-num">3</span>
+      <div>
+        <h2>Validación y vista previa</h2>
+        <p>Padres, niveles, duplicados y calidad de datos.</p>
+      </div>
+    </div>
+    <div id="summary-bar" class="summary-grid"></div>
+
+    <h3>🌳 Vista previa de la jerarquía</h3>
+    <div id="hierarchy-tree" class="hierarchy-tree"></div>
+
+    <div style="margin-top:16px;">
+      <h3>Incidencias</h3>
+      <div id="incidencias-table"></div>
+      <div id="clean-msg" class="success-msg" style="display:none">
+        <i class="ti ti-circle-check"></i> No se encontraron incidencias estructurales.
+      </div>
+    </div>
+
+    <div class="ai-card">
+      <div class="ai-title">
+        <span><i class="ti ti-sparkles"></i> Asistente IA (Claude)</span>
+        <span id="ai-status-badge" class="badge baja">Listo</span>
+      </div>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 10px;">
+        Analiza la jerarquía completa buscando padres rotos, IDs duplicados, ramas incorrectas (ej. una cuenta de Pasivo colgada en Activo) y tipos fuera de la lista válida.
+      </p>
+      <button id="btn-ai" class="secondary" type="button"><i class="ti ti-bulb"></i> Sugerir con IA</button>
+      <div id="status-line" class="ai-status-line"></div>
+      <div id="ai-progress-wrap" style="display:none">
+        <div class="ai-progress-bar"><div id="ai-progress-fill" class="ai-progress-fill" style="width:0%"></div></div>
+      </div>
+      <div id="ai-result" style="margin-top:14px;"></div>
+    </div>
+  </section>
+
+  <!-- STEP 4: EXPORT -->
+  <section id="step4" class="step-block" style="display:none">
+    <div class="step-title">
+      <span class="step-num">4</span>
+      <div>
+        <h2>Generar archivo</h2>
+        <p id="gen-status">Esperando validación.</p>
+      </div>
+    </div>
+    <button id="btn-generate" class="primary large" type="button"><i class="ti ti-download"></i> Generar archivo Fiori</button>
+  </section>
+
+  <footer>Generador de jerarquías · Procesamiento local en el navegador · Llamadas directas a la API de Claude.</footer>
+</div>
+
+<script>
+/* ============================================================
+   UTILIDADES
+============================================================ */
+const $ = (id) => document.getElementById(id);
+function normalize(v){ if(v===null||v===undefined) return ''; return String(v).trim().replace(/\s+/g,' '); }
+function normalizeKey(v){ return normalize(v).toUpperCase(); }
+function escapeHtml(v){
+  return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+function show(el){ if(el) el.style.display=''; }
+function hide(el){ if(el) el.style.display='none'; }
+function setStatus(el,msg,type=''){ if(!el) return; el.textContent=msg; el.className=`status ${type}`; }
+
+let RESULT = null;
+let CURRENT_FILE = null;
+
+/* ============================================================
+   LECTURA EXCEL
+============================================================ */
+async function readExcel(file){
+  const buffer = await file.arrayBuffer();
+  return XLSX.read(buffer, { type:'array', cellDates:true });
+}
+function findSheet(workbook, name){
+  const target = normalizeKey(name);
+  return workbook.SheetNames.find(n => normalizeKey(n) === target);
+}
+function findColumn(row, candidates){
+  const keys = Object.keys(row).map(k => ({ original:k, normalized:normalizeKey(k) }));
+  for(const c of candidates){
+    const nc = normalizeKey(c);
+    const found = keys.find(k => k.normalized === nc || k.normalized.includes(nc));
+    if(found) return found.original;
+  }
+  return null;
+}
+function parseHierarchyWorkbook(workbook){
+  const sheetName = findSheet(workbook, 'Input');
+  if(!sheetName) throw new Error('El archivo debe contener una hoja llamada "Input".');
+  const ws = workbook.Sheets[sheetName];
+  const rowsWithHeaders = XLSX.utils.sheet_to_json(ws, { defval:'', raw:false });
+
+  let rows = [];
+  if(rowsWithHeaders.length > 0){
+    const first = rowsWithHeaders[0];
+    const idCol = findColumn(first, ['ID','ID JERARQUIA','ID NODO','CODIGO','CÓDIGO']);
+    const descCol = findColumn(first, ['DESCRIPCION','DESCRIPCIÓN','DESCRIPTION','TEXTO','NOMBRE']);
+    if(idCol && descCol){
+      rows = rowsWithHeaders.map((row, i) => ({
+        originalRow: i+2, id: normalize(row[idCol]), descripcion: normalize(row[descCol])
+      }));
+    }
+  }
+  if(rows.length === 0){
+    const raw = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', raw:false });
+    rows = raw.map((row, i) => ({
+      originalRow: i+1,
+      id: row[0]!==undefined ? String(row[0]).trim() : '',
+      descripcion: row[1]!==undefined ? String(row[1]).trim() : ''
+    }));
+  }
+  rows = rows.filter(r => r.id !== '' || r.descripcion !== '');
+  if(rows.length === 0) throw new Error('La hoja "Input" no contiene registros.');
+  return rows;
+}
+
+/* ============================================================
+   CONSTRUCCIÓN DE JERARQUÍA (padre/nivel/tipo)
+============================================================ */
+function isStructuralId(id, records, currentIndex){
+  const value = normalize(id);
+  if(!value) return false;
+  const key = normalizeKey(value);
+  for(let i=0;i<records.length;i++){
+    if(i===currentIndex) continue;
+    const otherId = normalizeKey(records[i]?.id);
+    if(!otherId || otherId===key) continue;
+    if(otherId.startsWith(key) && otherId.length>key.length) return true;
+  }
+  if(value.includes('.')) return true;
+  if(value.includes('-') && value.split('-').length>1) return true;
+  if(/^\d+$/.test(value) && value.length<=4) return true;
+  return false;
+}
+function classifyNode(record, childrenMap, records){
+  const id = normalizeKey(record.id);
+  const children = childrenMap.get(id) || [];
+  if(children.length>0) return 'Nodo';
+  const index = records.indexOf(record);
+  if(isStructuralId(record.id, records, index)) return 'Nodo';
+  return 'Posición de cuenta de explotación de consolidación';
+}
+function calculateLevels(records, hierarchyId){
+  const byId = new Map();
+  records.forEach(r => byId.set(normalizeKey(r.id), r));
+  function getLevel(record, visited=new Set()){
+    const key = normalizeKey(record.id);
+    if(visited.has(key)) return 0;
+    visited.add(key);
+    if(!record.parentId) return 0;
+    if(normalizeKey(record.parentId)===normalizeKey(hierarchyId)) return 1;
+    const parent = byId.get(normalizeKey(record.parentId));
+    if(!parent) return 0;
+    return getLevel(parent, visited)+1;
+  }
+  records.forEach(r => r.level = getLevel(r));
+  return records;
+}
+function processHierarchy(rows, hierarchyId, hierarchyDesc){
+  const incidents = [];
+  const mainRoot = { index:0, originalRow:'-', id:hierarchyId, descripcion:hierarchyDesc, parentId:'', level:0, tipo:'Raíz', valid:true };
+  const records = rows.map((row,i) => ({
+    index:i+1, originalRow:row.originalRow, id:normalize(row.id), descripcion:normalize(row.descripcion),
+    parentId:'', level:0, tipo:'', valid:true
+  }));
+
+  records.forEach(record => {
+    if(!record.id){
+      record.valid=false;
+      incidents.push({severity:'Error', row:record.originalRow, id:'', message:'El ID está vacío.'});
+    }
+    if(!record.descripcion){
+      record.valid=false;
+      incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:'La descripción está vacía.'});
+    }
+  });
+
+  const ids = new Map();
+  records.forEach(record => {
+    const key = normalizeKey(record.id);
+    if(!key) return;
+    if(ids.has(key)){
+      record.valid=false;
+      incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:`ID duplicado. También aparece en la fila ${ids.get(key)}.`});
+    } else { ids.set(key, record.originalRow); }
+  });
+
+  const allIds = new Set(records.filter(r=>r.id).map(r=>normalizeKey(r.id)));
+  const hierarchyRootId = normalize(hierarchyId);
+  let ultimoNodo = '';
+  records.forEach(record => {
+    if(!record.id) return;
+    if(/^\d{1,6}$/.test(record.id)){
+      if(record.id.length===1){
+        record.parentId = hierarchyRootId;
+      } else {
+        const prefix = record.id.slice(0,-1);
+        if(allIds.has(normalizeKey(prefix))){
+          record.parentId = prefix;
+        } else {
+          record.parentId = 'REVISAR';
+          record.valid = false;
+          incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:`El padre "${prefix}" no existe.`});
+        }
+      }
+      ultimoNodo = record.id;
+    } else {
+      if(ultimoNodo){
+        record.parentId = ultimoNodo;
+      } else {
+        record.parentId = 'REVISAR';
+        record.valid = false;
+        incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:'No se pudo determinar el padre.'});
+      }
+    }
+  });
+
+  records.forEach(record => {
+    const parentKey = normalizeKey(record.parentId);
+    if(record.parentId && record.parentId!=='REVISAR' && parentKey!==normalizeKey(hierarchyRootId) && !allIds.has(parentKey)){
+      record.valid = false;
+      incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:`El padre "${record.parentId}" no existe.`});
+    }
+  });
+
+  const childrenMap = new Map();
+  records.forEach(record => {
+    if(!record.parentId) return;
+    const key = normalizeKey(record.parentId);
+    if(!childrenMap.has(key)) childrenMap.set(key, []);
+    childrenMap.get(key).push(record);
+  });
+
+  calculateLevels(records, hierarchyId);
+  records.forEach(record => { record.tipo = classifyNode(record, childrenMap, records); });
+
+  records.unshift(mainRoot);
+  return { records, incidents, childrenMap };
+}
+
+function refreshIncidents(){
+  if(!RESULT?.records?.length) return;
+  const incidents = [];
+  const records = RESULT.records.filter(r => r.index !== 0);
+  const hierarchyRootId = normalize(RESULT.records[0]?.id);
+  const allIds = new Set(records.filter(r=>r.id).map(r=>normalizeKey(r.id)));
+
+  records.forEach(record => {
+    if(!record.id){ incidents.push({severity:'Error', row:record.originalRow, id:'', message:'El ID está vacío.'}); return; }
+    if(!record.descripcion) incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:'La descripción está vacía.'});
+    if(!record.parentId){ incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:'No se pudo determinar el padre.'}); return; }
+    const parentKey = normalizeKey(record.parentId);
+    if(parentKey !== normalizeKey(hierarchyRootId) && !allIds.has(parentKey)){
+      incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:`El padre "${record.parentId}" no existe.`});
+    }
+  });
+
+  const ids = new Map();
+  records.forEach(record => {
+    const key = normalizeKey(record.id);
+    if(!key) return;
+    if(ids.has(key)) incidents.push({severity:'Error', row:record.originalRow, id:record.id, message:`ID duplicado. También aparece en la fila ${ids.get(key)}.`});
+    else ids.set(key, record.originalRow);
+  });
+
+  RESULT.incidents = incidents;
+  renderIncidents($('incidencias-table'), incidents);
+  if(incidents.length===0) show($('clean-msg')); else hide($('clean-msg'));
+}
+
+/* ============================================================
+   RENDER: RESUMEN / ÁRBOL / INCIDENCIAS
+============================================================ */
+function buildSummary(records, incidents, hierarchyId){
+  const errors = incidents.filter(i=>i.severity==='Error').length;
+  const roots = records.filter(r => normalizeKey(r.parentId)===normalizeKey(hierarchyId)).length;
+  const maxLevel = records.length ? Math.max(...records.map(r=>r.level)) : 0;
+  return { total: records.length, errors, roots, levels: maxLevel+1 };
+}
+function renderSummary(summary){
+  $('summary-bar').innerHTML = `
+    <div class="summary-card"><div class="label">Registros</div><div class="value">${summary.total}</div></div>
+    <div class="summary-card"><div class="label">Errores</div><div class="value">${summary.errors}</div></div>
+    <div class="summary-card"><div class="label">Raíces</div><div class="value">${summary.roots}</div></div>
+    <div class="summary-card"><div class="label">Niveles</div><div class="value">${summary.levels}</div></div>
+  `;
+}
+function renderIncidents(container, incidents){
+  if(!container) return;
+  if(!incidents.length){ container.innerHTML=''; return; }
+  const rows = incidents.map(inc => `
+    <tr class="${inc.severity==='Error'?'problem':''}">
+      <td>${escapeHtml(inc.severity)}</td><td>${escapeHtml(inc.row)}</td>
+      <td>${escapeHtml(inc.id)}</td><td>${escapeHtml(inc.message)}</td>
+    </tr>`).join('');
+  container.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Tipo</th><th>Fila</th><th>ID</th><th>Incidencia</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function buildTreeMap(records){
+  const map = new Map();
+  records.forEach(r => {
+    const key = normalizeKey(r.parentId);
+    if(!map.has(key)) map.set(key, []);
+    map.get(key).push(r);
+  });
+  map.forEach(children => children.sort((a,b)=>a.originalRow-b.originalRow || 0));
+  return map;
+}
+function createTreeNode(record, childrenMap){
+  const children = childrenMap.get(normalizeKey(record.id)) || [];
+  const hasChildren = children.length>0;
+  const wrapper = document.createElement('div');
+  const row = document.createElement('div');
+  row.className = 'h-node-row' + (record.valid===false ? ' err' : '');
+
+  const toggle = document.createElement('button');
+  toggle.className = 'h-toggle' + (hasChildren?'':' leaf');
+  toggle.textContent = hasChildren ? '▼' : '•';
+  if(!hasChildren) toggle.disabled = true;
+
+  const icon = document.createElement('span');
+  icon.className = 'h-icon'; icon.textContent = hasChildren ? '📁' : '📄';
+  const id = document.createElement('span'); id.className='h-id'; id.textContent = record.id;
+  const desc = document.createElement('span'); desc.className='h-desc'; desc.textContent = record.descripcion;
+  const type = document.createElement('span'); type.className='h-type'; type.textContent = record.tipo;
+
+  row.append(toggle, icon, id, desc, type);
+  wrapper.appendChild(row);
+
+  if(hasChildren){
+    const childrenWrap = document.createElement('div');
+    childrenWrap.className = 'h-children';
+    children.forEach(c => childrenWrap.appendChild(createTreeNode(c, childrenMap)));
+    wrapper.appendChild(childrenWrap);
+    toggle.addEventListener('click', () => {
+      const visible = childrenWrap.style.display !== 'none';
+      childrenWrap.style.display = visible ? 'none' : '';
+      toggle.textContent = visible ? '▶' : '▼';
+    });
+  }
+  return wrapper;
+}
+function renderTree(){
+  const container = $('hierarchy-tree');
+  container.innerHTML = '';
+  if(!RESULT?.records?.length){ container.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted)">Sin datos.</div>'; return; }
+  const treeMap = buildTreeMap(RESULT.records);
+  const uniqueRoots = RESULT.records.filter(r => r.index===0);
+  uniqueRoots.forEach(root => container.appendChild(createTreeNode(root, treeMap)));
+}
+
+function updateValidationUI(){
+  const hierarchyId = normalize($('f-id').value);
+  const summary = buildSummary(RESULT.records, RESULT.incidents, hierarchyId);
+  renderSummary(summary);
+  renderTree();
+  renderIncidents($('incidencias-table'), RESULT.incidents);
+  if(RESULT.incidents.length===0) show($('clean-msg')); else hide($('clean-msg'));
+  $('gen-status').textContent = RESULT.incidents.some(i=>i.severity==='Error')
+    ? 'Hay incidencias pendientes. Puedes usar el asistente IA o revisar manualmente.'
+    : 'Validación completada. El archivo está listo para generar.';
+  show($('step3')); show($('step4'));
+}
+
+/* ============================================================
+   TROCEO POR RAMA (con fix de recursión infinita)
+============================================================ */
+function trocearPorRama(registros, tamanoMaximo){
+  const porId = new Map(registros.map(r => [r.id, r]));
+  const hijosDe = new Map();
+  for(const r of registros){
+    const p = r.padre_original || '__RAIZ__';
+    if(!hijosDe.has(p)) hijosDe.set(p, []);
+    hijosDe.get(p).push(r);
+  }
+  function recolectarSubarbol(id, visitados=new Set()){
+    if(visitados.has(id)) return [];
+    visitados.add(id);
+    const nodo = porId.get(id);
+    const resultado = nodo ? [nodo] : [];
+    const hijos = hijosDe.get(id) || [];
+    for(const hijo of hijos) resultado.push(...recolectarSubarbol(hijo.id, visitados));
+    return resultado;
+  }
+  function dividirGrupoGrande(grupo, tamanoMaximo){
+    if(grupo.length <= tamanoMaximo) return [grupo];
+    const nivelMinimo = Math.min(...grupo.map(r => r.nivel_original));
+    const raices = grupo.filter(r => r.nivel_original === nivelMinimo);
+    if(raices.length === 1){
+      const camino = [raices[0]];
+      let actual = raices[0];
+      let hijosDirectos = hijosDe.get(actual.id) || [];
+      while(hijosDirectos.length === 1){
+        actual = hijosDirectos[0];
+        camino.push(actual);
+        hijosDirectos = hijosDe.get(actual.id) || [];
+      }
+      if(hijosDirectos.length === 0) return [grupo];
+      const subGrupos = [];
+      let primero = true;
+      for(const hijo of hijosDirectos){
+        const subArbol = recolectarSubarbol(hijo.id);
+        if(primero){ subGrupos.push([...camino, ...subArbol]); primero=false; }
+        else subGrupos.push(subArbol);
+      }
+      const resultado = [];
+      for(const sg of subGrupos){
+        if(sg.length >= grupo.length) resultado.push(sg);
+        else resultado.push(...dividirGrupoGrande(sg, tamanoMaximo));
+      }
+      return resultado;
+    }
+    const resultado = [];
+    for(const raiz of raices){
+      const subArbol = recolectarSubarbol(raiz.id);
+      if(subArbol.length >= grupo.length) resultado.push(subArbol);
+      else resultado.push(...dividirGrupoGrande(subArbol, tamanoMaximo));
+    }
+    return resultado;
+  }
+  const raicesAbsolutas = registros.filter(r => !r.padre_original);
+  const gruposIniciales = raicesAbsolutas.map(raiz => recolectarSubarbol(raiz.id));
+  const idsUsados = new Set(gruposIniciales.flat().map(r => r.id));
+  const huerfanos = registros.filter(r => !idsUsados.has(r.id));
+  if(huerfanos.length) gruposIniciales.push(huerfanos);
+
+  let subGruposFinales = [];
+  for(const grupo of gruposIniciales) subGruposFinales.push(...dividirGrupoGrande(grupo, tamanoMaximo));
+
+  const bloques = [];
+  let actual = [];
+  for(const sg of subGruposFinales){
+    if(sg.length >= tamanoMaximo){
+      if(actual.length){ bloques.push(actual); actual=[]; }
+      bloques.push(sg); continue;
+    }
+    if(actual.length + sg.length > tamanoMaximo){ bloques.push(actual); actual=[]; }
+    actual.push(...sg);
+  }
+  if(actual.length) bloques.push(actual);
+  return bloques;
+}
+
+/* ============================================================
+   PROMPT DEL SISTEMA (las 6 reglas validadas)
+============================================================ */
+const SYSTEM_PROMPT = `Eres un experto en:
+- Plan General Contable español.
+- Estados financieros.
+- Jerarquías contables.
+- SAP Group Reporting.
+- Jerarquías de posiciones de consolidación.
+- Estructuras jerárquicas contables utilizadas en SAP Fiori.
+
+OBJETIVO
+Tu función es analizar los registros contables recibidos en formato JSON y determinar
+la estructura jerárquica más coherente, detectando inconsistencias en la jerarquía original.
+
+REGLAS DE ANÁLISIS (aplícalas en este orden)
+
+1. INTEGRIDAD REFERENCIAL
+   - "padre_original" debe corresponder a un "id" que exista dentro de los registros recibidos.
+     Si no existe, márcalo como incidencia "padre_no_encontrado".
+   - Si "padre_original" está vacío y el nodo no es raíz, márcalo como "padre_faltante".
+
+2. COHERENCIA DE NIVELES
+   - "nivel_original" debe ser igual al nivel de su padre + 1.
+   - Si no se cumple, sugiere "nivel_sugerido" = nivel del padre (real o corregido) + 1.
+
+3. IDS DUPLICADOS - DETECCIÓN
+   - Si dos o más registros comparten "id", márcalos con incidencia "id_duplicado".
+
+4. IDS DUPLICADOS - MANEJO OBLIGATORIO (prevalece sobre cualquier otra regla)
+   - Si un "id" aparece más de una vez: para TODOS los registros con ese id (y los que lo
+     tengan como padre_original), NO propongas cambios de padre_sugerido ni nivel_sugerido.
+   - "padre_sugerido" = "padre_original", "nivel_sugerido" = "nivel_original",
+     "cambio_propuesto" = false, "confianza" = "baja".
+   - NUNCA asignes como padre_sugerido un id duplicado.
+   - La resolución requiere corrección manual en el archivo origen, nunca inferencia automática.
+
+5. INFERENCIA POR DESCRIPCIÓN Y CÓDIGO (PGC) — incluye detección de RAMA INCORRECTA
+   - Aunque el padre_original exista y el nivel sea coherente, analiza si la rama jerárquica
+     (Activo/Pasivo/Patrimonio Neto, o equivalente) corresponde a la naturaleza contable de
+     la descripción y el código/prefijo PGC del nodo.
+   - Si detectas que un nodo está colgado en la rama equivocada (ej. una cuenta de Pasivo
+     bajo un nodo de Activo), sugiere el padre correcto dentro de la rama correspondiente,
+     "cambio_propuesto" = true, y genera una incidencia "rama_incorrecta".
+   - Los grupos 4 y 5 del PGC son ambiguos; si no hay señal clara, confianza "baja".
+
+6. TIPOS VÁLIDOS (lista cerrada — NUNCA generar valores fuera de esta lista)
+   Los únicos valores permitidos para "tipo_original" y "tipo_sugerido" son, EXACTAMENTE:
+   - "Raíz"
+   - "Nodo"
+   - "Posición de cuenta de explotación de consolidación"
+   NUNCA inventes variantes (ej. "Posición de balance de consolidación"). Si el tipo original
+   ya es válido y coherente con la posición del nodo (raíz/intermedio/hoja), mantenlo igual,
+   aunque conceptualmente distingas Balance vs P&L — el sistema no admite esa distinción.
+
+REGLAS DE DECISIÓN
+- "cambio_propuesto" = true ÚNICAMENTE si padre_sugerido, nivel_sugerido o tipo_sugerido
+  difieren de los valores "_original".
+- "confianza": "alta" (integridad referencial clara o código PGC exacto), "media"
+  (inferencia por descripción sin coincidencia exacta), "baja" (sin señal suficiente, o
+  afectado por la regla 4).
+- NUNCA inventes un id que no exista en la lista recibida.
+
+FORMATO DE SALIDA (exacto, sin texto adicional, sin markdown, sin comentarios)
+Cada elemento de "registros" DEBE contener EXACTAMENTE estos campos, en este orden:
+"id","descripcion","padre_original","nivel_original","tipo_original",
+"padre_sugerido","nivel_sugerido","tipo_sugerido","cambio_propuesto","confianza","explicacion"
+
+"incidencias" debe existir siempre como array (puede estar vacío). CADA elemento debe ser
+un objeto con esta estructura EXACTA — nunca un string suelto:
+{"id":"...","tipo_incidencia":"padre_no_encontrado | padre_faltante | id_duplicado | rama_incorrecta | ambiguedad_pgc","detalle":"..."}
+
+Responde EXCLUSIVAMENTE con este objeto JSON:
+{"registros":[{"id":"...","descripcion":"...","padre_original":"...","nivel_original":0,"tipo_original":"...","padre_sugerido":"...","nivel_sugerido":0,"tipo_sugerido":"...","cambio_propuesto":false,"confianza":"alta","explicacion":"..."}],"incidencias":[]}
+
+No añadas texto antes ni después del JSON. No uses bloques de markdown.`;
+
+/* ============================================================
+   LLAMADA DIRECTA A LA API DE CLAUDE
+============================================================ */
+async function callClaude(bloqueRegistros){
+  const apiKey = $('api-key').value.trim();
+  const headers = { 'Content-Type': 'application/json' };
+  if(apiKey) headers['x-api-key'] = apiKey;
+  if(apiKey) headers['anthropic-version'] = '2023-06-01';
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 8000,
+      system: SYSTEM_PROMPT,
+      messages: [
+        { role:'user', content: JSON.stringify({ registros: bloqueRegistros }) }
+      ]
+    })
+  });
+
+  if(!response.ok){
+    const errText = await response.text();
+    throw new Error(`Error API (${response.status}): ${errText}`);
+  }
+
+  const data = await response.json();
+  const textBlock = data.content.find(c => c.type === 'text');
+  if(!textBlock) throw new Error('La respuesta no contiene texto.');
+
+  let raw = textBlock.text.trim();
+  raw = raw.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```\s*$/i, '');
+
+  let parsed;
+  try { parsed = JSON.parse(raw); }
+  catch(e){ throw new Error('No se pudo parsear el JSON devuelto por la IA: ' + e.message); }
+
+  if(!Array.isArray(parsed.registros)) throw new Error('La respuesta no contiene el array "registros".');
+  return parsed;
+}
+
+/* ============================================================
+   FLUJO PRINCIPAL DE ANÁLISIS IA
+============================================================ */
+async function suggestWithAI(){
+  const btn = $('btn-ai');
+  const statusLine = $('status-line');
+  const badge = $('ai-status-badge');
+  const progressWrap = $('ai-progress-wrap');
+  const progressFill = $('ai-progress-fill');
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2"></i> Analizando...';
+  badge.textContent = 'Analizando'; badge.className = 'badge media';
+  show(progressWrap); progressFill.style.width = '0%';
+
+  const estructuraIA = RESULT.records.filter(r => r.index !== 0).map(x => ({
+    id: String(x.id ?? '').trim(),
+    descripcion: String(x.descripcion ?? '').trim(),
+    // 'REVISAR' es un marcador interno para "padre no determinado"; no es un
+    // ID real, así que se envía vacío para que la IA lo trate como padre_faltante.
+    padre_original: normalizeKey(x.parentId) === 'REVISAR' ? '' : String(x.parentId ?? '').trim(),
+    nivel_original: Number(x.level ?? 0),
+    tipo_original: String(x.tipo ?? '').trim()
+  }));
+
+  if(!estructuraIA.length){
+    statusLine.textContent = 'No hay registros para analizar.';
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-bulb"></i> Sugerir con IA';
+    hide(progressWrap);
+    return;
+  }
+
+  const CHUNK_SIZE = 30;
+  const bloques = trocearPorRama(estructuraIA, CHUNK_SIZE);
+
+  const todosLosRegistros = [];
+  const todasLasIncidencias = [];
+
+  try {
+    for(let i=0; i<bloques.length; i++){
+      const bloque = bloques[i];
+      statusLine.textContent = `Analizando bloque ${i+1} de ${bloques.length} (${bloque.length} registros)...`;
+      progressFill.style.width = `${Math.round(((i)/bloques.length)*100)}%`;
+
+      const data = await callClaude(bloque);
+      todosLosRegistros.push(...data.registros);
+      if(Array.isArray(data.incidencias)) todasLasIncidencias.push(...data.incidencias);
+
+      progressFill.style.width = `${Math.round(((i+1)/bloques.length)*100)}%`;
+    }
+
+    const idsOriginales = new Set(estructuraIA.map(x => x.id));
+    const hierarchyRootIdNow = normalize($('f-id').value);
+    if(hierarchyRootIdNow) idsOriginales.add(hierarchyRootIdNow);
+
+    const resultadoIA = todosLosRegistros.map(item => {
+      const id = String(item.id ?? '').trim();
+      const padre = String(item.padre_sugerido ?? '').trim();
+      if(!idsOriginales.has(id)) throw new Error(`La IA devolvió un ID inexistente: ${id}`);
+      if(padre && !idsOriginales.has(padre)) throw new Error(`La IA asignó un padre inexistente: ${padre} para ${id}`);
+      return {
+        id, descripcion: String(item.descripcion ?? '').trim(),
+        padre_original: String(item.padre_original ?? '').trim(),
+        nivel_original: Number(item.nivel_original ?? 0),
+        tipo_original: String(item.tipo_original ?? '').trim(),
+        padre_sugerido: padre,
+        nivel_sugerido: Number.isFinite(Number(item.nivel_sugerido)) ? Number(item.nivel_sugerido) : 0,
+        tipo_sugerido: String(item.tipo_sugerido ?? '').trim(),
+        cambio_propuesto: item.cambio_propuesto === true,
+        confianza: item.confianza || 'baja',
+        explicacion: item.explicacion || ''
+      };
+    });
+
+    if(resultadoIA.length !== estructuraIA.length){
+      throw new Error(`La IA devolvió ${resultadoIA.length} registros, pero se enviaron ${estructuraIA.length}.`);
+    }
+
+    RESULT.aiSuggestion = resultadoIA;
+    RESULT.aiIncidencias = todasLasIncidencias;
+
+    const cambios = resultadoIA.filter(i => i.cambio_propuesto === true);
+    renderAIResult(resultadoIA, cambios, todasLasIncidencias);
+
+    badge.textContent = 'Listo'; badge.className = 'badge alta';
+    statusLine.textContent = cambios.length===0 && todasLasIncidencias.length===0
+      ? `✓ Todo está correcto. Se analizaron ${resultadoIA.length} registros.`
+      : `Análisis de ${resultadoIA.length} registros completado. Revisa los ${cambios.length} cambios propuestos.`;
+    statusLine.classList.add('success');
+
+  } catch(err){
+    console.error('Error analizando con IA:', err);
+    statusLine.textContent = 'Error: ' + err.message;
+    badge.textContent = 'Error'; badge.className = 'badge baja';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-bulb"></i> Sugerir con IA';
+    hide(progressWrap);
+  }
+}
+
+function renderAIResult(resultadoIA, cambios, incidencias){
+  const aiResult = $('ai-result');
+  let html = '';
+
+  if(incidencias.length){
+    html += `<h3 style="margin-top:0">Incidencias detectadas (${incidencias.length})</h3>`;
+    html += `<div class="table-wrap" style="margin-bottom:14px"><table><thead><tr><th>ID</th><th>Tipo</th><th>Detalle</th></tr></thead><tbody>`;
+    html += incidencias.map(inc => `
+      <tr><td>${escapeHtml(inc.id)}</td>
+      <td><span class="incident-badge">${escapeHtml(inc.tipo_incidencia)}</span></td>
+      <td>${escapeHtml(inc.detalle)}</td></tr>`).join('');
+    html += `</tbody></table></div>`;
+  }
+
+  if(cambios.length === 0 && incidencias.length === 0){
+    html += `<div class="success-msg" style="margin-top:0"><i class="ti ti-circle-check"></i> No se encontraron cambios necesarios.</div>`;
+  } else if(cambios.length > 0) {
+    html += `<h3>Cambios propuestos (${cambios.length})</h3>`;
+    html += `<div class="table-wrap"><table><thead><tr><th></th><th>ID</th><th>Padre actual</th><th>Padre sugerido</th><th>Nivel</th><th>Tipo sugerido</th><th>Confianza</th></tr></thead><tbody>`;
+    html += cambios.map(item => {
+      const idx = resultadoIA.indexOf(item);
+      return `<tr class="change-row">
+        <td><input type="checkbox" class="ai-change-checkbox" data-ai-index="${idx}" checked /></td>
+        <td><strong>${escapeHtml(item.id)}</strong></td>
+        <td>${escapeHtml(item.padre_original || 'Sin padre')}</td>
+        <td><strong>${escapeHtml(item.padre_sugerido || 'Sin padre')}</strong></td>
+        <td>${item.nivel_original} → <strong>${item.nivel_sugerido}</strong></td>
+        <td>${escapeHtml(item.tipo_sugerido)}</td>
+        <td><span class="badge ${item.confianza}">${escapeHtml(item.confianza)}</span></td>
+      </tr>
+      <tr><td></td><td colspan="6" style="font-size:11px;color:var(--muted);padding-top:0;">${escapeHtml(item.explicacion)}</td></tr>`;
+    }).join('');
+    html += `</tbody></table></div>`;
+    html += `<div class="action-row"><button id="btn-apply-ai" class="primary" type="button"><i class="ti ti-check"></i> Aplicar cambios seleccionados</button></div>`;
+  }
+
+  aiResult.innerHTML = html;
+
+  const btnApply = $('btn-apply-ai');
+  if(btnApply) btnApply.addEventListener('click', applyAISuggestions);
+}
+
+function applyAISuggestions(){
+  if(!RESULT?.aiSuggestion?.length) return 0;
+  const checkboxes = document.querySelectorAll('.ai-change-checkbox:checked');
+  let aplicados = 0;
+
+  checkboxes.forEach(cb => {
+    const idx = Number(cb.dataset.aiIndex);
+    const sug = RESULT.aiSuggestion[idx];
+    if(!sug) return;
+    const record = RESULT.records.find(r => normalizeKey(r.id)===normalizeKey(sug.id));
+    if(!record || record.index===0) return;
+
+    record.parentId = normalize(sug.padre_sugerido);
+    record.level = Number(sug.nivel_sugerido);
+    if(sug.tipo_sugerido) record.tipo = sug.tipo_sugerido;
+    aplicados++;
+  });
+
+  if(aplicados===0) return 0;
+
+  refreshIncidents();
+  renderTree();
+  renderSummary(buildSummary(RESULT.records, RESULT.incidents, normalize($('f-id').value)));
+
+  $('ai-result').innerHTML = `<div class="success-msg" style="margin-top:0"><i class="ti ti-circle-check"></i> Se aplicaron ${aplicados} cambios sugeridos por la IA.</div>`;
+  $('status-line').textContent = `✓ Se aplicaron ${aplicados} cambios.`;
+  return aplicados;
+}
+
+/* ============================================================
+   EXPORTAR EXCEL (formato Fiori exacto, con hoja Validation oculta)
+============================================================ */
+function buildHierarchyFioriData(){
+  if(!RESULT) throw new Error('No existe información procesada.');
+
+  const hierarchyId = normalize($('f-id').value);
+  const hierarchyDescription = normalize($('f-desc').value);
+  const validFrom = normalize($('f-inicio').value);
+  const validTo = normalize($('f-fin').value);
+  const coa = normalize($('f-coa').value);
+
+  const header = {
+    'ID Jerarquía': hierarchyId,
+    'Descripción jerarquía': hierarchyDescription,
+    'Inicio de validez': validFrom,
+    'Fin de validez': validTo,
+    'COA de consolidación': coa,
+  };
+
+  const data = RESULT.records.filter(r => r.index !== 0).map(record => ({
+    ID: record.id,
+    Descripción: record.descripcion,
+    Padre: record.parentId,
+    Nivel: record.level,
+    Tipo: record.tipo,
+  }));
+
+  return { header, data };
+}
+
+function buildJson1(idJerarquia, descJerarquia){
+  return JSON.stringify({
+    CLIENT: '', VER_ID: '', VER_PID: '', VER_STATUS: 'S',
+    VER_VLDFM: '00000000', VER_VLDTO: '00000000', VER_MSG: '', VER_NBR: '',
+    VER_IDX: '000000000000001', HIER_HID: idJerarquia, HIER_CATG: 'CS15',
+    UPDATED_AT: null, UPDATED_BY: '', CREATED_AT: null, CREATED_BY: '',
+    LOCKED_BY: '', LOCKED_AT: null, ALLOW_LEGACY_TCODE_USAGE: '', VER_SRC: '',
+    MAINTENANCE_LANG: 'S', REF_UPDATED_AT: 0, CREATED_ON: '',
+    CATEGORYTEXT: 'Posición de cuenta de explotación de consolidación',
+    HIER_DESC: descJerarquia, HRY_CLASS: '', STATUSTEXT: '',
+    SIMULATE_REPORT_ID: '', ACTIVE_REPORT_ID: '', IS_UNASSIGNED_SHOW: '',
+    IS_RANGE_SUPPORTED: '', HIDE_VALIDITY: '', ATTRIBUTEVALUES: '',
+    LOCK_HIER_ATTR_EDIT: '', HIERARCHY_TAG: '', HIERARCHY_TAG_TEXT: '',
+    HAS_REFERENCE_NODE: '', ISPRIVATE: '',
+  });
+}
+
+function buildJson2(planCuentas){
+  return JSON.stringify([{
+    CLIENT: '', OBJ_ID: '', FLD_NAME: 'CONSOLIDATIONCHARTOFACCOUNTS',
+    VAL_SIGN: 'S', VAL_LOW: planCuentas, VAL_HIGH: '', VER_ID: '',
+    VAL_LOW_TEXT: 'Plan de cuentas consolidación', VAL_HIGH_TEXT: '', LANG: '',
+  }]);
+}
+
+async function downloadWorkbook(data, filename){
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Jerarquía');
+
+  worksheet.getCell('A1').value = 'Posición de cuenta de explotación de consolidación';
+  worksheet.getCell('A1').font = { name:'Aptos Narrow', size:11, bold:true, color:{argb:'000000'} };
+
+  const fields = [
+    ['ID de jerarquía:', 'ID Jerarquía'],
+    ['Inicio de validez:', 'Inicio de validez'],
+    ['Fin de validez:', 'Fin de validez'],
+    ['COA de consolidación:', 'COA de consolidación'],
+  ];
+  fields.forEach(([label, key], index) => {
+    const row = index + 2;
+    worksheet.getCell(`A${row}`).value = label;
+    worksheet.getCell(`B${row}`).value = data.header[key];
+    worksheet.getRow(row).eachCell(cell => { cell.font = { name:'Aptos Narrow', size:11 }; });
+  });
+
+  const technicalHeaders = [
+    'Posición de cuenta de explotación de consolidación',
+    'Nivel', 'Tipo', 'ID', 'Descripción', 'ID principal', 'Cambio de signo',
+  ];
+  worksheet.getRow('7').values = technicalHeaders;
+  worksheet.getRow(7).eachCell(cell => {
+    cell.font = { name:'Aptos Narrow', size:11, bold:true };
+    cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFD9D9D9'} };
+  });
+
+  // Fila 8: raíz de la jerarquía — texto descriptivo en A8 y también sus
+  // columnas técnicas (Tipo/ID/Descripción), igual que el resto de nodos.
+  const hierarchyId = data.header['ID Jerarquía'];
+  const hierarchyDescription = data.header['Descripción jerarquía'];
+  worksheet.getCell('A8').value = `|-${hierarchyId} (${hierarchyDescription})`;
+  worksheet.getCell('C8').value = 'Raíz';
+  worksheet.getCell('D8').value = hierarchyId;
+  worksheet.getCell('E8').value = hierarchyDescription;
+
+  // Los datos empiezan en la fila 9.
+  data.data.forEach((record, index) => {
+    const row = index + 9;
+    worksheet.getCell(`C${row}`).value = record.Tipo;
+    worksheet.getCell(`D${row}`).value = record.ID;
+    worksheet.getCell(`E${row}`).value = record.Descripción;
+    worksheet.getCell(`F${row}`).value = record.Padre;
+  });
+
+  worksheet.columns.forEach(column => {
+    let maxLength = 0;
+    column.eachCell({ includeEmpty:true }, cell => {
+      const length = cell.value ? String(cell.value).length : 0;
+      if(length > maxLength) maxLength = length;
+    });
+    column.width = maxLength + 2;
+  });
+
+  const worksheetValidation = workbook.addWorksheet('Validation');
+  const validationData = [
+    ['Nodo', 'Posición de cuenta de explotación de consolidación', 'Raíz'],
+    [
+      buildJson1(data.header['ID Jerarquía'], data.header['Descripción jerarquía']),
+      buildJson2(data.header['COA de consolidación']),
+    ],
+    ['8'],
+    ['F'],
+    [],
+    ['', '', 'E', 'S', 'G', 'SIGN', 'B', 'SIGN', ''],
+    ['', '', '', '', '', '', '', 'SIGN', 'X'],
+  ];
+  validationData.forEach((row, rowIndex) => {
+    row.forEach((value, colIndex) => {
+      worksheetValidation.getCell(rowIndex + 1, colIndex + 1).value = value;
+    });
+  });
+  worksheetValidation.state = 'hidden';
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+async function generateHierarchyFile(){
+  if(!RESULT){ alert('Primero debes procesar el archivo.'); return; }
+  try {
+    const data = buildHierarchyFioriData();
+    const hierarchyId = normalize($('f-id').value) || 'JERARQUIA';
+    const filename = `Fiori_Jerarquia_${hierarchyId}.xlsx`;
+    await downloadWorkbook(data, filename);
+    $('gen-status').textContent = `Archivo generado correctamente: ${filename}`;
+  } catch(error){
+    console.error(error);
+    alert(`No fue posible generar el archivo:\n${error.message}`);
+  }
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+function initDropzone(inputId){
+  const input = $(inputId);
+  const label = document.querySelector(`label[for="${inputId}"]`);
+  if(!input || !label) return;
+  ['dragenter','dragover'].forEach(ev => label.addEventListener(ev, e => { e.preventDefault(); label.style.borderColor='var(--blue)'; }));
+  ['dragleave','drop'].forEach(ev => label.addEventListener(ev, e => { e.preventDefault(); label.style.borderColor=''; }));
+  label.addEventListener('drop', e => {
+    const file = e.dataTransfer.files?.[0];
+    if(!file) return;
+    const dt = new DataTransfer(); dt.items.add(file);
+    input.files = dt.files;
+    input.dispatchEvent(new Event('change'));
+  });
+}
+
+async function processHierarchyFile(){
+  if(!CURRENT_FILE){ alert('Selecciona primero un archivo Excel.'); return; }
+  const button = $('btn-process');
+  button.disabled = true;
+  setStatus($('file-status'), 'Procesando archivo...');
+
+  try {
+    const workbook = await readExcel(CURRENT_FILE);
+    const rows = parseHierarchyWorkbook(workbook);
+    const hierarchyId = normalize($('f-id').value);
+    const hierarchyDesc = normalize($('f-desc').value);
+
+    RESULT = processHierarchy(rows, hierarchyId, hierarchyDesc);
+    updateValidationUI();
+    setStatus($('file-status'), `${rows.length} registros procesados correctamente.`, 'success');
+  } catch(error){
+    console.error(error);
+    RESULT = null;
+    hide($('step3')); hide($('step4'));
+    setStatus($('file-status'), error.message, 'error');
+    alert(`No fue posible procesar el archivo:\n\n${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function init(){
+  initDropzone('file-input');
+
+  $('file-input').addEventListener('change', e => {
+    const file = e.target.files?.[0];
+    if(!file) return;
+    CURRENT_FILE = file;
+    RESULT = null;
+    hide($('step3')); hide($('step4'));
+    $('btn-process').disabled = false;
+    setStatus($('file-status'), `Archivo seleccionado: ${file.name}`);
+  });
+
+  $('btn-process').addEventListener('click', processHierarchyFile);
+  $('btn-ai').addEventListener('click', suggestWithAI);
+  $('btn-generate').addEventListener('click', generateHierarchyFile);
+}
+init();
+</script>
+</body>
+</html>

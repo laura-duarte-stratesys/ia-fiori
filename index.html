@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Generador SAP Group Reporting</title>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
+    <link rel="stylesheet" href="/src/stle.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="brand">
+          <div class="brand-mark"><i class="ti ti-building-bank"></i></div>
+          <div>
+            <div class="eyebrow">SAP S/4HANA · Group Reporting</div>
+            <h1>Generador de archivos Fiori</h1>
+            <p>
+              Construye jerarquías de consolidación y posiciones del plan de
+              cuentas desde Excel.
+            </p>
+          </div>
+        </div>
+        <div class="header-badge">
+          <i class="ti ti-sparkles"></i> Asistente IA
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <span class="hero-kicker">Automatización</span>
+          <h2>De Excel a Fiori, con validación inteligente.</h2>
+          <p>
+            Sube tu archivo, valida la estructura, revisa incidencias y genera
+            el Excel compatible con Fiori.
+          </p>
+        </div>
+        <div class="hero-stats">
+          <div><strong>2</strong><span>generadores</span></div>
+          <div><strong>IA</strong><span>revisión asistida</span></div>
+        </div>
+      </section>
+
+      <section class="mode-grid">
+        <button class="mode-card active" id="accordion-jerarquia" type="button">
+          <span class="mode-icon blue"><i class="ti ti-hierarchy-2"></i></span>
+          <span class="mode-copy"
+            ><strong>Jerarquía Fiori</strong
+            ><small>Construir estructura, padres y niveles</small></span
+          >
+          <i class="ti ti-chevron-right mode-arrow"></i>
+        </button>
+        <button class="mode-card" id="accordion-plan" type="button">
+          <span class="mode-icon grey"><i class="ti ti-list-tree"></i></span>
+          <span class="mode-copy"
+            ><strong>Plan de cuentas</strong
+            ><small>Crear posiciones y reglas de Group Reporting</small></span
+          >
+          <i class="ti ti-chevron-right mode-arrow"></i>
+        </button>
+      </section>
+
+      <section id="panel-jerarquia" class="workspace">
+        <div class="step-block">
+          <div class="step-title">
+            <span class="step-num">1</span>
+            <div>
+              <h2>Datos de la jerarquía</h2>
+              <p>Define los parámetros que viajarán al archivo Fiori.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="f-id">ID de jerarquía</label
+              ><input
+                id="f-id"
+                type="text"
+                placeholder="Z_BS_PL"
+                value="Z_BS_PL"
+              />
+            </div>
+            <div class="field">
+              <label for="f-desc">Descripción</label
+              ><input
+                id="f-desc"
+                type="text"
+                placeholder="Z_Estructura Balance y PyG"
+                value="Z_Estructura Balance y PyG"
+              />
+            </div>
+            <div class="field">
+              <label for="f-inicio">Inicio de validez</label
+              ><input
+                id="f-inicio"
+                type="text"
+                placeholder="01.01.2026"
+                value="01.01.2026"
+              />
+            </div>
+            <div class="field">
+              <label for="f-fin">Fin de validez</label
+              ><input
+                id="f-fin"
+                type="text"
+                placeholder="31.12.9999"
+                value="31.12.9999"
+              />
+            </div>
+            <div class="field full">
+              <label for="f-coa">COA de consolidación</label
+              ><input id="f-coa" type="text" placeholder="Y1" value="Y1" />
+            </div>
+          </div>
+        </div>
+
+        <div class="step-block">
+          <div class="step-title">
+            <span class="step-num">2</span>
+            <div>
+              <h2>Archivo de entrada</h2>
+              <p>
+                La hoja <strong>Input</strong> debe contener ID y descripción.
+                Opcionalmente puede existir <strong>Cuentas</strong> para
+                completar descripciones.
+              </p>
+            </div>
+          </div>
+          <label class="dropzone" for="file-input">
+            <i class="ti ti-file-spreadsheet"></i
+            ><strong>Selecciona o arrastra tu Excel</strong
+            ><span>Formato .xlsx, .xlsm o .xls</span>
+          </label>
+          <input
+            id="file-input"
+            class="file-hidden"
+            type="file"
+            accept=".xlsx,.xlsm,.xls"
+          />
+          <div id="file-status" class="status"></div>
+          <div class="action-row">
+            <button id="btn-process" disabled class="primary" type="button">
+              <i class="ti ti-player-play"></i> Procesar y validar
+            </button>
+          </div>
+        </div>
+
+        <section id="step3" class="step-block" style="display: none">
+          <div class="step-title">
+            <span class="step-num">3</span>
+            <div>
+              <h2>Validación inteligente</h2>
+              <p>Se revisan padres, niveles, duplicados y calidad de datos.</p>
+            </div>
+          </div>
+          <div id="summary-bar" class="summary-grid"></div>
+          <div class="hierarchy-preview-card">
+            <div class="hierarchy-preview-header">
+              <div>
+                <h3>🌳 Vista previa de la jerarquía</h3>
+                <p>Visualización de la estructura detectada en el archivo.</p>
+              </div>
+
+              <div class="hierarchy-preview-actions">
+                <button type="button" id="btn-expand-all" class="secondary-btn">
+                  Expandir todo
+                </button>
+
+                <button
+                  type="button"
+                  id="btn-collapse-all"
+                  class="secondary-btn"
+                >
+                  Contraer todo
+                </button>
+              </div>
+            </div>
+
+            <div id="hierarchy-tree" class="hierarchy-tree"></div>
+          </div>
+          <div class="validation-layout">
+            <div>
+              <h3>Incidencias</h3>
+              <div id="incidencias-table"></div>
+              <div id="clean-msg" class="success" style="display: none">
+                <i class="ti ti-circle-check"></i> No se encontraron
+                incidencias. Se puede generar el archivo.
+              </div>
+            </div>
+            <aside class="ai-card">
+              <div class="ai-title">
+                <span>
+                  <i class="ti ti-sparkles"></i> Asistente IA
+                </span>
+                <span class="ai-status" id="ai-status-jerarquia">Listo</span>
+              </div>
+            
+              <p id="ai-summary">
+                La IA puede explicar las incidencias y proponer acciones antes
+                de generar el archivo.
+              </p>
+            
+              <button id="btn-ai-jerarquia" class="secondary" type="button">
+                <i class="ti ti-bulb"></i> Analizar con IA
+              </button>
+            
+              <div id="status-line" class="ai-status-line"></div>
+            
+            
+            </aside>
+            <div id="ai-result-jerarquia" class="ai-result"></div>
+
+                  
+        </section>
+
+        <section id="step4" class="step-block" style="display: none">
+          <div class="step-title">
+            <span class="step-num">4</span>
+            <div>
+              <h2>Generar archivo</h2>
+              <p id="gen-status">Esperando validación.</p>
+            </div>
+          </div>
+          <button
+            id="btn-generate"
+      
+            class="primary large"
+            type="button"
+          >
+            <i class="ti ti-download"></i> Generar archivo Fiori
+          </button>
+        </section>
+      </section>
+
+      <section id="panel-plan" class="workspace" style="display: none">
+        <div class="step-block">
+          <div class="step-title">
+            <span class="step-num">1</span>
+            <div>
+              <h2>Parámetros del plan de cuentas</h2>
+              <p>Configura los datos maestros del archivo.</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field">
+              <label for="p-plan">Plan de cuentas</label
+              ><input id="p-plan" type="text" value="Y1" placeholder="Y1" />
+            </div>
+            <div class="field">
+              <label for="p-plan-desc">Descripción plan de cuentas</label
+              ><input
+                id="p-plan-desc"
+                type="text"
+                value="Plan de cuentas consolidación"
+                placeholder="Plan de cuentas consolidación"
+              />
+            </div>
+            <div class="field">
+              <label for="p-version">Versión de consolidación</label
+              ><input
+                id="p-version"
+                type="text"
+                value="Y10"
+                placeholder="Y10"
+              />
+            </div>
+            <div class="field">
+              <label for="p-version-desc">Descripción versión</label
+              ><input
+                id="p-version-desc"
+                type="text"
+                value="Valores reales"
+                placeholder="Valores reales"
+              />
+            </div>
+            <div class="field">
+              <label for="p-periodo">Ejercicio / período</label
+              ><input
+                id="p-periodo"
+                type="text"
+                placeholder="2026/006"
+                value="2026/006"
+              />
+            </div>
+            <div class="field">
+              <label for="p-idioma">Idioma</label
+              ><select id="p-idioma">
+                <option value="EN">EN -- Inglés</option>
+                <option value="ES">ES -- Español</option>
+                <option value="AF">AF -- Afrikáans</option>
+                <option value="AR">AR -- Árabe</option>
+                <option value="BG">BG -- Búlgaro</option>
+                <option value="CA">CA -- Catalán</option>
+                <option value="CS">CS -- Checo</option>
+                <option value="DA">DA -- Danés</option>
+                <option value="DE">DE -- Alemán</option>
+                <option value="EL">EL -- Griego</option>
+
+                <option value="ET">ET -- Estonio</option>
+                <option value="FI">FI -- Finlandés</option>
+                <option value="FR">FR -- Francés</option>
+                <option value="HE">HE -- Hebreo</option>
+                <option value="HI">HI -- Hindi</option>
+                <option value="HR">HR -- Croata</option>
+                <option value="HU">HU -- Húngaro</option>
+                <option value="ID">ID -- Indonesio</option>
+                <option value="IS">IS -- Islandés</option>
+                <option value="IT">IT -- Italiano</option>
+                <option value="JA">JA -- Japonés</option>
+                <option value="KK">KK -- Kazajo</option>
+                <option value="KO">KO -- Coreano</option>
+                <option value="LT">LT -- Lituano</option>
+                <option value="LV">LV -- Letón</option>
+                <option value="MS">MS -- Malayo</option>
+                <option value="NL">NL -- Neerlandés</option>
+                <option value="NO">NO -- Noruego</option>
+                <option value="PL">PL -- Polaco</option>
+                <option value="PT">PT -- Portugués</option>
+                <option value="RO">RO -- Rumano</option>
+                <option value="RU">RU -- Ruso</option>
+                <option value="SH">SH -- Serbio (latino)</option>
+                <option value="SK">SK -- Eslovaco</option>
+                <option value="SL">SL -- Esloveno</option>
+                <option value="SR">SR -- Serbio</option>
+                <option value="SV">SV -- Sueco</option>
+                <option value="TH">TH -- Tailandés</option>
+                <option value="TR">TR -- Turco</option>
+                <option value="UK">UK -- Ucraniano</option>
+                <option value="VI">VI -- Vietnamita</option>
+                <option value="Z1">Z1 -- Reservacliente</option>
+                <option value="ZF">ZF -- Chino trad.</option>
+                <option value="ZH">ZH -- Chino</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="step-block">
+          <div class="step-title">
+            <span class="step-num">2</span>
+            <div>
+              <h2>Archivo de entrada</h2>
+              <p>
+                La hoja <strong>Input</strong> debe contener Indicador, CTA.
+                GRUPO, descripción, ACCTYPE y eliminaciones.
+              </p>
+            </div>
+          </div>
+          <label class="dropzone" for="plan-file-input"
+            ><i class="ti ti-file-spreadsheet"></i
+            ><strong>Selecciona o arrastra tu Excel</strong
+            ><span>Formato .xlsx, .xlsm o .xls</span></label
+          >
+          <input
+            id="plan-file-input"
+            class="file-hidden"
+            type="file"
+            accept=".xlsx,.xlsm,.xls"
+          />
+          <div id="plan-file-status" class="status"></div>
+          <div class="action-row">
+            <button
+              id="btn-plan-process"
+              disabled
+              class="primary"
+              type="button"
+            >
+              <i class="ti ti-player-play"></i> Procesar y validar
+            </button>
+          </div>
+        </div>
+
+        <section id="plan-step3" class="step-block" style="display: none">
+          <div class="step-title">
+            <span class="step-num">3</span>
+            <div>
+              <h2>Validación inteligente</h2>
+              <p>
+                Se revisan datos obligatorios, duplicados y conflictos de
+                ACCTYPE.
+              </p>
+            </div>
+          </div>
+          <div id="plan-summary-bar" class="summary-grid"></div>
+          <div class="validation-layout">
+            <div>
+              <h3>Incidencias</h3>
+              <div id="plan-incidencias-table"></div>
+              <div id="plan-clean-msg" class="success" style="display: none">
+                <i class="ti ti-circle-check"></i> No se encontraron
+                incidencias. Se puede generar el archivo.
+              </div>
+            </div>
+      
+            <aside class="ai-card">
+            
+              <div class="ai-title">
+                <span>
+                  <i class="ti ti-sparkles"></i>
+                  Asistente IA
+                </span>
+            
+                <span class="ai-status" id="ai-status-plan">
+                  Listo
+                </span>
+            
+              </div>
+            
+              <p>
+                Analiza el plan de cuentas y propone únicamente cambios
+                justificados en ACCTYPE, TYPELIM y CONVERSION.
+              </p>
+            
+              <button
+                id="btn-ai-plan"
+                class="secondary"
+                type="button"
+              >
+                <i class="ti ti-bulb"></i>
+                Analizar con IA
+              </button>
+            
+            
+            </aside>
+            <div id="ai-result-plan" class="ai-result"></div>
+   
+            
+          </div>
+        </section>
+
+        <section id="plan-step4" class="step-block" style="display: none">
+          <div class="step-title">
+            <span class="step-num">4</span>
+            <div>
+              <h2>Generar archivo</h2>
+              <p id="plan-gen-status">Esperando validación.</p>
+            </div>
+          </div>
+          <button
+            id="btn-plan-generate"
+          
+            class="primary large"
+            type="button"
+          >
+            <i class="ti ti-download"></i> Generar archivo Fiori
+          </button>
+        </section>
+      </section>
+
+      <footer>
+        Generador SAP Group Reporting · Validación local en el navegador · Los
+        archivos Excel no se suben automáticamente a ningún servidor.
+      </footer>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,504 @@
+<h2 class="sr-only">Generador de jerarquía Fiori: subí el Input, completá los datos, corregí incidencias con IA y descargá el archivo listo para Fiori</h2>
+<div style="display:flex; flex-direction:column; gap:1.75rem; max-width:100%;">
+
+  <div id="step1" class="step-block">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="step-num">1</span>
+      <h3 style="font-size:16px; font-weight:500; margin:0;">Datos de la jerarquía</h3>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px;">
+      <div><label style="font-size:13px; color:var(--text-secondary); display:block; margin-bottom:4px;">ID de jerarquía</label><input id="f-id" type="text" placeholder="Z_BS_PL" style="width:100%;"/></div>
+      <div><label style="font-size:13px; color:var(--text-secondary); display:block; margin-bottom:4px;">Descripción</label><input id="f-desc" type="text" placeholder="Z_Estructura Balance y PyG" style="width:100%;"/></div>
+      <div><label style="font-size:13px; color:var(--text-secondary); display:block; margin-bottom:4px;">Inicio de validez</label><input id="f-inicio" type="text" placeholder="01.01.2026" style="width:100%;"/></div>
+      <div><label style="font-size:13px; color:var(--text-secondary); display:block; margin-bottom:4px;">Fin de validez</label><input id="f-fin" type="text" placeholder="31.12.9999" style="width:100%;"/></div>
+      <div style="grid-column:1 / -1;"><label style="font-size:13px; color:var(--text-secondary); display:block; margin-bottom:4px;">COA de consolidación (plan de cuentas)</label><input id="f-coa" type="text" placeholder="Y1" style="width:100%;"/></div>
+    </div>
+  </div>
+
+  <div id="step2" class="step-block">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="step-num">2</span>
+      <h3 style="font-size:16px; font-weight:500; margin:0;">Subir archivo con la hoja Input</h3>
+    </div>
+    <p style="font-size:13px; color:var(--text-secondary); margin:0 0 12px;">Subí el .xlsx/.xlsm que tiene la pestaña Input (columna B = ID, columna C = Descripción, sin encabezado). Si el archivo también tiene una hoja "Cuentas", se usa para completar descripciones vacías.</p>
+    <input id="file-input" type="file" accept=".xlsx,.xlsm,.xls" style="font-size:13px;"/>
+    <div id="file-status" style="font-size:13px; color:var(--text-secondary); margin-top:8px;"></div>
+    <button id="btn-process" style="margin-top:12px; font-size:13px; padding:6px 14px;" disabled><i class="ti ti-player-play" style="font-size:15px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Procesar y validar</button>
+    <p id="btn-process-hint" style="font-size:12px; color:var(--text-muted); margin-top:6px;">Subí un archivo válido arriba para habilitar este botón.</p>
+  </div>
+
+  <div id="step3" class="step-block" style="display:none;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="step-num">3</span>
+      <h3 style="font-size:16px; font-weight:500; margin:0;">Validación</h3>
+    </div>
+    <div id="summary-bar" style="display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:12px; margin-bottom:1.25rem;"></div>
+
+    <div id="dup-section" style="display:none; margin-bottom:1.5rem;">
+      <h4 style="font-size:14px; font-weight:500; margin:0 0 4px;">IDs duplicados <span style="color:var(--text-secondary); font-weight:400;">— editá si querés otro ID</span></h4>
+      <div id="dup-table"></div>
+    </div>
+
+    <div id="revisar-section" style="display:none;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+        <h4 style="font-size:14px; font-weight:500; margin:0;">Padres sin determinar</h4>
+        <button id="btn-suggest" style="font-size:13px; padding:6px 14px;"><i class="ti ti-sparkles" style="font-size:15px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Sugerir con IA</button>
+      </div>
+      <div id="status-line" style="font-size:13px; color:var(--text-secondary); margin:8px 0; display:none;"></div>
+      <div id="revisar-table"></div>
+    </div>
+
+    <div id="clean-msg" style="display:none; font-size:13px; color:var(--text-success);"><i class="ti ti-check" style="font-size:15px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Sin incidencias. Se puede generar el archivo.</div>
+
+    <button id="btn-apply" style="margin-top:1.25rem; font-size:13px; padding:6px 14px; display:none;"><i class="ti ti-refresh" style="font-size:15px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Aplicar correcciones y revalidar</button>
+  </div>
+
+  <div id="step4" class="step-block" style="display:none;">
+    <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+      <span class="step-num">4</span>
+      <h3 style="font-size:16px; font-weight:500; margin:0;">Generar archivo</h3>
+    </div>
+    <p id="gen-status" style="font-size:13px; color:var(--text-secondary); margin:0 0 12px;"></p>
+    <button id="btn-generate" style="font-size:13px; padding:8px 16px;" disabled><i class="ti ti-download" style="font-size:15px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Generar carga_Jerarquia_Fiori.xlsx</button>
+  </div>
+
+</div>
+
+<style>
+.step-block{background:var(--surface-1); border-radius:12px; padding:1.25rem;}
+.step-num{display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:50%; background:var(--fill-primary); color:var(--on-primary); font-size:12px; font-weight:500;}
+table.gen-table{width:100%; font-size:13px; border-collapse:collapse; table-layout:fixed;}
+table.gen-table th{text-align:left; padding:8px; color:var(--text-secondary); font-weight:500;}
+table.gen-table td{padding:8px; border-top:0.5px solid var(--border);}
+</style>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/iconfont/tabler-icons.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+let RAW_DATA = null;
+let CUENTAS_MAP = null;
+let RESULT = null;
+let OVERRIDES = {};
+let DUP_RENAMES = {};
+
+function esSoloDigitos(s){ return /^[0-9]+$/.test(s); }
+function clasificarID(id){
+  if(esSoloDigitos(id) && id.length>=1 && id.length<=6) return {tipo:'nodo', nivel:id.length};
+  return {tipo:'hoja', nivel:0};
+}
+function obtenerPrefijoPadre(id){ return id.length<=1 ? '' : id.slice(0,-1); }
+
+function getFormValues(){
+  return {
+    idJerarquia: document.getElementById('f-id').value.trim(),
+    descJerarquia: document.getElementById('f-desc').value.trim(),
+    fechaInicio: document.getElementById('f-inicio').value.trim(),
+    fechaFin: document.getElementById('f-fin').value.trim(),
+    planCuentas: document.getElementById('f-coa').value.trim()
+  };
+}
+
+document.getElementById('file-input').addEventListener('change', async (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const statusEl = document.getElementById('file-status');
+  const hintEl = document.getElementById('btn-process-hint');
+  try{
+    if(typeof XLSX === 'undefined'){
+      statusEl.style.color = 'var(--text-danger)';
+      statusEl.textContent = 'No se pudo cargar la librería para leer Excel (XLSX). Revisá tu conexión y volvé a intentar recargando el artefacto.';
+      return;
+    }
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, {type:'array'});
+    const sheetNames = wb.SheetNames;
+    let inputSheetName = sheetNames.find(n => n.toLowerCase() === 'input') || sheetNames.find(n => n.toLowerCase().includes('input'));
+    if(!inputSheetName){
+      statusEl.textContent = 'No se encontró una hoja "Input" en el archivo. Hojas disponibles: ' + sheetNames.join(', ');
+      statusEl.style.color = 'var(--text-danger)';
+      return;
+    }
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[inputSheetName], {header:1, raw:false, defval:''});
+    const data = [];
+    rows.forEach(r=>{
+      const id = (r[1] !== undefined ? String(r[1]).trim() : '');
+      const desc = (r[2] !== undefined ? String(r[2]).trim() : '');
+      if(id !== '') data.push({id, desc});
+    });
+    RAW_DATA = data;
+
+    if(RAW_DATA.length === 0){
+      statusEl.style.color = 'var(--text-danger)';
+      statusEl.textContent = 'La hoja "' + inputSheetName + '" no tiene datos en la columna B (ID). Revisá que el ID esté en la columna B y la descripción en la C.';
+      return;
+    }
+
+    const cuentasSheetName = sheetNames.find(n => n.toLowerCase() === 'cuentas');
+    CUENTAS_MAP = new Map();
+    if(cuentasSheetName){
+      const crows = XLSX.utils.sheet_to_json(wb.Sheets[cuentasSheetName], {header:1, raw:false, defval:''});
+      crows.forEach(r=>{
+        const code = (r[0] !== undefined ? String(r[0]).trim() : '');
+        const desc = (r[1] !== undefined ? String(r[1]).trim() : '');
+        if(code !== '' && !CUENTAS_MAP.has(code)) CUENTAS_MAP.set(code, desc);
+      });
+    }
+
+    statusEl.style.color = 'var(--text-secondary)';
+    statusEl.textContent = `Hoja "${inputSheetName}" cargada: ${data.length} filas.` + (cuentasSheetName ? ` Hoja "Cuentas" detectada: ${CUENTAS_MAP.size} códigos.` : ' Sin hoja "Cuentas" (opcional).');
+    document.getElementById('btn-process').disabled = false;
+    hintEl.textContent = 'Listo — ya podés tocar "Procesar y validar".';
+    hintEl.style.color = 'var(--text-success)';
+  } catch(err){
+    statusEl.style.color = 'var(--text-danger)';
+    statusEl.textContent = 'No se pudo leer el archivo (' + (err && err.message ? err.message : 'error desconocido') + '). Verificá que sea un .xlsx/.xlsm válido.';
+    console.error(err);
+  }
+});
+
+function procesar(data, idJerarquia){
+  const n = data.length;
+  const tipos = [], nivelesOrigen = [];
+  const nodosExiste = new Set();
+
+  for(let i=0;i<n;i++){
+    const c = clasificarID(data[i].id);
+    tipos.push(c.tipo);
+    nivelesOrigen.push(c.nivel);
+    if(c.tipo==='nodo') nodosExiste.add(data[i].id);
+  }
+
+  const parents = [];
+  let ultimoNodo = '';
+  for(let i=0;i<n;i++){
+    if(OVERRIDES[i]){
+      parents.push(OVERRIDES[i]);
+      if(tipos[i]==='nodo') ultimoNodo = data[i].id;
+      continue;
+    }
+    if(tipos[i]==='nodo'){
+      if(nivelesOrigen[i]===1){
+        parents.push(idJerarquia);
+      } else {
+        const prefix = obtenerPrefijoPadre(data[i].id);
+        parents.push(nodosExiste.has(prefix) ? prefix : 'REVISAR');
+      }
+      ultimoNodo = data[i].id;
+    } else {
+      parents.push(ultimoNodo !== '' ? ultimoNodo : 'REVISAR');
+    }
+  }
+
+  const descsFinal = [];
+  for(let i=0;i<n;i++){
+    let d = data[i].desc;
+    if(d === '' && CUENTAS_MAP && CUENTAS_MAP.has(data[i].id)){
+      d = CUENTAS_MAP.get(data[i].id);
+    }
+    descsFinal.push(d);
+  }
+
+  const nivelPorId = new Map();
+  nivelPorId.set(idJerarquia, 1);
+  for(let i=0;i<n;i++){
+    if(tipos[i]==='nodo' && !nivelPorId.has(data[i].id)){
+      nivelPorId.set(data[i].id, nivelesOrigen[i] + 1);
+    }
+  }
+  const nivelesSalida = [];
+  for(let i=0;i<n;i++){
+    if(tipos[i]==='hoja'){
+      nivelesSalida.push(nivelPorId.has(parents[i]) ? nivelPorId.get(parents[i]) + 1 : 'REVISAR');
+    } else {
+      nivelesSalida.push(nivelPorId.has(data[i].id) ? nivelPorId.get(data[i].id) : 'REVISAR');
+    }
+  }
+
+  const dictIDs = new Map();
+  const duplicados = [];
+  for(let i=0;i<n;i++){
+    const finalId = DUP_RENAMES[i] || data[i].id;
+    if(dictIDs.has(finalId) && !DUP_RENAMES[i]){
+      duplicados.push({idx:i, id:data[i].id, desc:data[i].desc});
+    } else {
+      dictIDs.set(finalId, i);
+    }
+  }
+
+  const revisar = [];
+  for(let i=0;i<n;i++){
+    if(parents[i]==='REVISAR' || nivelesSalida[i]==='REVISAR'){
+      revisar.push({idx:i, id:data[i].id, desc:data[i].desc, tipo:tipos[i]});
+    }
+  }
+
+  const candidatos = [{id:idJerarquia, desc: getFormValues().descJerarquia || '(raíz)', nivel:1}];
+  for(let i=0;i<n;i++){
+    if(tipos[i]==='nodo' && parents[i]!=='REVISAR'){
+      candidatos.push({id:data[i].id, desc:data[i].desc, nivel:nivelesOrigen[i]});
+    }
+  }
+
+  return {tipos, nivelesOrigen, parents, descsFinal, nivelesSalida, duplicados, revisar, candidatos, n};
+}
+
+function renderSummary(){
+  const el = document.getElementById('summary-bar');
+  const cards = [
+    {label:'Filas procesadas', val: RESULT.n},
+    {label:'IDs duplicados', val: RESULT.duplicados.length},
+    {label:'Padres sin determinar', val: RESULT.revisar.length},
+    {label:'Nodos válidos', val: RESULT.candidatos.length}
+  ];
+  el.innerHTML = cards.map(c => `
+    <div style="background:var(--surface-2); border-radius:var(--radius); padding:1rem;">
+      <p style="font-size:13px; color:var(--text-secondary); margin:0 0 4px;">${c.label}</p>
+      <p style="font-size:24px; font-weight:500; margin:0;">${c.val}</p>
+    </div>`).join('');
+}
+
+function renderDupTable(){
+  const section = document.getElementById('dup-section');
+  if(RESULT.duplicados.length===0){ section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  const el = document.getElementById('dup-table');
+  el.innerHTML = `<table class="gen-table">
+    <thead><tr><th style="width:15%;">ID original</th><th>Descripción</th><th style="width:25%;">ID final</th></tr></thead>
+    <tbody>${RESULT.duplicados.map(d=>{
+      const suggested = DUP_RENAMES[d.idx] || (d.id + '_2');
+      DUP_RENAMES[d.idx] = suggested;
+      return `<tr><td>${d.id}</td><td style="color:var(--text-secondary);">${d.desc}</td>
+        <td><input type="text" data-idx="${d.idx}" class="dup-input" value="${suggested}" style="width:100%; font-size:12px;"/></td></tr>`;
+    }).join('')}</tbody></table>`;
+  document.querySelectorAll('.dup-input').forEach(inp=>{
+    inp.addEventListener('input', ()=>{ DUP_RENAMES[inp.getAttribute('data-idx')] = inp.value.trim(); });
+  });
+}
+
+function renderRevisarTable(suggestions){
+  const section = document.getElementById('revisar-section');
+  if(RESULT.revisar.length===0){ section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  const el = document.getElementById('revisar-table');
+  const options = RESULT.candidatos.map(c => `<option value="${c.id}">${c.id} — ${c.desc}</option>`).join('');
+  el.innerHTML = `<table class="gen-table">
+    <thead><tr><th style="width:10%;">ID</th><th style="width:22%;">Descripción</th><th style="width:26%;">Padre (editable)</th><th style="width:10%;">Confianza</th><th>Motivo</th></tr></thead>
+    <tbody>${RESULT.revisar.map(r=>{
+      const s = suggestions ? suggestions[r.id] : null;
+      const conf = s ? s.confianza : '';
+      const confColor = conf==='alta' ? 'var(--text-success)' : conf==='media' ? 'var(--text-warning)' : conf==='baja' ? 'var(--text-danger)' : 'var(--text-muted)';
+      return `<tr>
+        <td>${r.id}</td>
+        <td style="color:var(--text-secondary);">${r.desc}</td>
+        <td><select data-idx="${r.idx}" class="parent-select" style="width:100%; font-size:12px;">
+          <option value="">${s ? '' : '— elegir —'}</option>${options}</select></td>
+        <td style="font-size:12px; color:${confColor};">${conf || '—'}</td>
+        <td style="font-size:12px; color:var(--text-secondary);">${s ? s.motivo : ''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  document.querySelectorAll('.parent-select').forEach(sel=>{
+    const idx = sel.getAttribute('data-idx');
+    const row = RESULT.revisar.find(r=>String(r.idx)===idx);
+    if(suggestions && row && suggestions[row.id]) sel.value = suggestions[row.id].padre_sugerido;
+    sel.addEventListener('change', ()=>{ OVERRIDES[idx] = sel.value || undefined; updateApplyState(); });
+  });
+  updateApplyState();
+}
+
+function updateApplyState(){
+  document.getElementById('btn-apply').style.display = (RESULT.revisar.length>0 || RESULT.duplicados.length>0) ? 'inline-flex' : 'none';
+}
+
+function checkCleanAndEnableGenerate(){
+  const cleanMsg = document.getElementById('clean-msg');
+  const genStatus = document.getElementById('gen-status');
+  const genBtn = document.getElementById('btn-generate');
+  const form = getFormValues();
+  const formOk = form.idJerarquia && form.descJerarquia && form.fechaInicio && form.fechaFin && form.planCuentas;
+  const dataOk = RESULT.revisar.length===0 && RESULT.duplicados.length===0;
+  cleanMsg.style.display = dataOk ? 'block' : 'none';
+  document.getElementById('step4').style.display = 'block';
+  if(!formOk){ genStatus.textContent = 'Completá los 5 campos del paso 1 antes de generar.'; genBtn.disabled = true; return; }
+  if(!dataOk){ genStatus.textContent = 'Todavía hay incidencias sin resolver arriba.'; genBtn.disabled = true; return; }
+  genStatus.textContent = 'Todo listo. Se generará con ID de jerarquía "' + form.idJerarquia + '".';
+  genBtn.disabled = false;
+}
+
+document.getElementById('btn-process').addEventListener('click', ()=>{
+  const statusEl = document.getElementById('file-status');
+  try{
+    const form = getFormValues();
+    if(!form.idJerarquia){
+      statusEl.style.color = 'var(--text-danger)';
+      statusEl.textContent = 'Falta completar el "ID de jerarquía" en el paso 1 antes de procesar.';
+      return;
+    }
+    if(!RAW_DATA || RAW_DATA.length===0){
+      statusEl.style.color = 'var(--text-danger)';
+      statusEl.textContent = 'Todavía no hay datos cargados. Subí el archivo con la hoja Input en el paso 2.';
+      return;
+    }
+    OVERRIDES = {};
+    DUP_RENAMES = {};
+    RESULT = procesar(RAW_DATA, form.idJerarquia);
+    document.getElementById('step3').style.display = 'block';
+    renderSummary();
+    renderDupTable();
+    renderRevisarTable(null);
+    if(RESULT.revisar.length===0 && RESULT.duplicados.length===0){
+      document.getElementById('clean-msg').style.display = 'block';
+    }
+    checkCleanAndEnableGenerate();
+    document.getElementById('step3').scrollIntoView({behavior:'smooth', block:'start'});
+  } catch(err){
+    statusEl.style.color = 'var(--text-danger)';
+    statusEl.textContent = 'Ocurrió un error al procesar: ' + err.message;
+    console.error(err);
+  }
+});
+
+document.getElementById('btn-apply').addEventListener('click', ()=>{
+  try{
+    const form = getFormValues();
+    RESULT = procesar(RAW_DATA, form.idJerarquia);
+    renderSummary();
+    renderDupTable();
+    renderRevisarTable(null);
+    checkCleanAndEnableGenerate();
+  } catch(err){
+    document.getElementById('gen-status').textContent = 'Ocurrió un error al revalidar: ' + err.message;
+    document.getElementById('gen-status').style.color = 'var(--text-danger)';
+    console.error(err);
+  }
+});
+
+async function suggestWithAI(){
+  const btn = document.getElementById('btn-suggest');
+  const statusLine = document.getElementById('status-line');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="ti ti-loader-2" style="font-size:15px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Consultando IA…';
+  statusLine.style.display = 'block';
+  statusLine.textContent = 'Analizando ' + RESULT.revisar.length + ' casos contra ' + RESULT.candidatos.length + ' nodos válidos…';
+
+  const candidatosStr = RESULT.candidatos.map(c => `${c.id} | nivel ${c.nivel} | ${c.desc}`).join('\n');
+  const casosStr = RESULT.revisar.map((r,i) => {
+    const idx = r.idx;
+    const before = RAW_DATA.slice(Math.max(0, idx-3), idx).map(x=>x.id+' | '+x.desc).join('\n');
+    const after = RAW_DATA.slice(idx+1, idx+3).map(x=>x.id+' | '+x.desc).join('\n');
+    return `CASO ${i+1}\nID: ${r.id}\nDescripción: ${r.desc}\nContexto antes:\n${before}\nContexto después:\n${after}\n`;
+  }).join('\n---\n');
+
+  const systemPrompt = `Sos un consultor experto en el Plan General Contable español y en jerarquías de SAP Group Reporting.
+Se te da una lista de NODOS VÁLIDOS ya existentes en la jerarquía (candidatos a padre) y una lista de CASOS sin padre determinado por regla de ID.
+Para cada caso, elegí el nodo padre más apropiado ÚNICAMENTE de la lista de candidatos, basándote en el significado contable de la descripción y el contexto posicional dado.
+Si un caso parece ser en realidad una cuenta/hoja mal clasificada (no un subtotal), elegí como padre el nodo que estaría inmediatamente por encima de ella en el contexto.
+Respondé SOLO con un array JSON válido, sin texto adicional, sin backticks, con este formato exacto:
+[{"id":"<ID del caso>","padre_sugerido":"<ID de un candidato de la lista>","confianza":"alta|media|baja","motivo":"<explicación breve en español, máximo 15 palabras>"}]`;
+
+  try{
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: `NODOS VÁLIDOS:\n${candidatosStr}\n\nCASOS:\n${casosStr}` }]
+      })
+    });
+    const data = await response.json();
+    const text = data.content.map(b => b.text || '').join('');
+    const clean = text.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(clean);
+    const byId = {};
+    parsed.forEach(p => { byId[p.id] = p; });
+    statusLine.textContent = 'Listo. Revisá cada sugerencia antes de aplicar — no son correcciones definitivas.';
+    renderRevisarTable(byId);
+  } catch(err){
+    statusLine.textContent = 'No se pudo obtener la sugerencia. Intentá de nuevo.';
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-sparkles" style="font-size:15px; vertical-align:-2px; margin-right:4px;" aria-hidden="true"></i>Sugerir con IA';
+  }
+}
+document.getElementById('btn-suggest').addEventListener('click', suggestWithAI);
+
+
+
+function generarArchivo(){
+ const genStatus = document.getElementById('gen-status');
+ try{
+  const form = getFormValues();
+  const n = RESULT.n;
+
+  const finalIds = RAW_DATA.map((row,i) => DUP_RENAMES[i] || row.id);
+  const seen = new Set();
+  for(const id of finalIds){
+    if(seen.has(id)){
+      genStatus.style.color = 'var(--text-danger)';
+      genStatus.textContent = 'Hay dos filas con el mismo ID final "' + id + '". Corregilo antes de generar.';
+      return;
+    }
+    seen.add(id);
+  }
+
+  const aoa = [];
+  aoa.push(["Posición de cuenta de explotación de consolidación", form.idJerarquia]);
+  aoa.push(["Inicio de validez:", form.fechaInicio]);
+  aoa.push(["Fin de validez:", form.fechaFin]);
+  aoa.push(["COA de consolidación:", form.planCuentas]);
+  aoa.push([]);
+  aoa.push([]);
+  aoa.push(["Posición de cuenta de explotación de consolidación", "Nivel", "Tipo", "ID", "Descripción", "ID principal", "Cambio de signo"]);
+  aoa.push([`|-${form.idJerarquia} (${form.descJerarquia})`, 1, "Raíz", form.idJerarquia, form.descJerarquia, "", ""]);
+
+  for(let i=0;i<n;i++){
+    aoa.push([
+      "",
+      RESULT.nivelesSalida[i],
+      RESULT.tipos[i]==='nodo' ? 'Nodo' : 'Posición de cuenta de explotación de consolidación',
+      finalIds[i],
+      RESULT.descsFinal[i],
+      RESULT.parents[i],
+      ""
+    ]);
+  }
+
+  const wsPos = XLSX.utils.aoa_to_sheet(aoa);
+  wsPos['!cols'] = [{wch:45},{wch:8},{wch:38},{wch:14},{wch:40},{wch:14},{wch:14}];
+
+  const wsVal = XLSX.utils.aoa_to_sheet([
+    ["Nodo", "Posición de cuenta de explotación de consolidación", "Raíz"],
+    [buildJson1(form.idJerarquia, form.descJerarquia), buildJson2(form.planCuentas)],
+    ["8"],
+    ["F"],
+    [],
+    ["", "", "E", "S", "G", "SIGN", "B", "SIGN", ""],
+    ["", "", "", "", "", "", "", "SIGN", "X"]
+  ]);
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsPos, "Posición");
+  XLSX.utils.book_append_sheet(wb, wsVal, "Validation");
+
+  const now = new Date();
+  const pad = x => String(x).padStart(2,'0');
+  const fname = `carga_Jerarquia_Fiori_${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`;
+
+  XLSX.writeFile(wb, fname);
+  genStatus.style.color = 'var(--text-success)';
+  genStatus.textContent = 'Archivo generado: ' + fname;
+ } catch(err){
+   genStatus.style.color = 'var(--text-danger)';
+   genStatus.textContent = 'Ocurrió un error al generar el archivo: ' + err.message;
+   console.error(err);
+ }
+}
+
+document.getElementById('btn-generate').addEventListener('click', generarArchivo);
+
+['f-id','f-desc','f-inicio','f-fin','f-coa'].forEach(id=>{
+  document.getElementById(id).addEventListener('input', ()=>{ if(RESULT) checkCleanAndEnableGenerate(); });
+});
+</script>
