@@ -3144,7 +3144,7 @@ function reanalizarPlanDespuesIA() {
    * ============================================================
    */
 
-  $('btn-plan-generate').disabled = hasErrors;
+  // $('btn-plan-generate').disabled = hasErrors;
 
   $('plan-gen-status').textContent = hasErrors
     ? 'Corrige las incidencias antes de generar el archivo.'
@@ -3533,7 +3533,7 @@ async function processPlanFile() {
       (incident) => incident.severity === 'Error'
     );
 
-    $('btn-plan-generate').disabled = hasErrors;
+    // $('btn-plan-generate').disabled = hasErrors;
 
     $('plan-gen-status').textContent = hasErrors
       ? 'Corrige las incidencias antes de generar el archivo.'
@@ -4429,7 +4429,7 @@ async function analyzePlanWithAI() {
    */
 
   if (btn) {
-    btn.disabled = true;
+    // btn.disabled = true;
 
     btn.innerHTML = `
       <i
@@ -5479,7 +5479,7 @@ async function applyAISuggestionsPlan() {
    * ============================================================
    */
 
-  $('btn-plan-generate').disabled = hasErrors;
+  // $('btn-plan-generate').disabled = hasErrors;
 
   /*
    * ============================================================
@@ -5620,7 +5620,7 @@ function initParameterValidation() {
         hide($('plan-step3'));
         hide($('plan-step4'));
 
-        $('btn-plan-generate').disabled = true;
+       // $('btn-plan-generate').disabled = true;
       }
     });
   });
@@ -5667,7 +5667,7 @@ function resetHierarchy() {
   hide($('step3'));
   hide($('step4'));
 
-  $('btn-process').disabled = true;
+ // $('btn-process').disabled = true;
   $('btn-generate').disabled = false;
 
   $('summary-bar').innerHTML = '';
@@ -5690,8 +5690,8 @@ function resetPlan() {
   hide($('plan-step3'));
   hide($('plan-step4'));
 
-  $('btn-plan-process').disabled = true;
-  $('btn-plan-generate').disabled = true;
+  // $('btn-plan-process').disabled = true;
+  // $('btn-plan-generate').disabled = true;
 
   $('plan-summary-bar').innerHTML = '';
   $('plan-incidencias-table').innerHTML = '';
