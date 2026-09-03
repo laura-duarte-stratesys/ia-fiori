@@ -1045,3 +1045,253 @@ footer {
     gap: 5px;
   }
 }
+.hierarchy-node {
+  cursor: grab;
+}
+
+.hierarchy-node:active {
+  cursor: grabbing;
+}
+
+.hierarchy-dragging {
+  opacity: 0.45;
+}
+
+.hierarchy-drop-target > .hierarchy-node-row {
+  outline: 2px dashed #1e80c3;
+  background: rgba(30, 128, 195, 0.08);
+}
+.hierarchy-delete {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 15px;
+  opacity: 0.65;
+  padding: 4px 6px;
+}
+
+.hierarchy-delete:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+/* ============================================================
+   MODAL DE JERARQUÍA
+============================================================ */
+
+.hierarchy-modal-overlay {
+  position: fixed;
+  inset: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  background: rgba(0, 0, 0, 0.45);
+
+  z-index: 9999;
+
+  opacity: 0;
+  visibility: hidden;
+
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+}
+
+.hierarchy-modal-overlay.show {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* ------------------------------------------------------------
+   CONTENEDOR
+------------------------------------------------------------ */
+
+.hierarchy-modal {
+  width: min(440px, calc(100vw - 40px));
+
+  background: #ffffff;
+
+  border-radius: 12px;
+
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+
+  padding: 28px;
+
+  transform: translateY(10px) scale(0.97);
+
+  transition: transform 0.18s ease;
+}
+
+.hierarchy-modal-overlay.show .hierarchy-modal {
+  transform: translateY(0) scale(1);
+}
+
+/* ------------------------------------------------------------
+   ICONO
+------------------------------------------------------------ */
+
+.hierarchy-modal-icon {
+  width: 48px;
+  height: 48px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 16px;
+
+  border-radius: 50%;
+
+  background: rgba(220, 53, 69, 0.1);
+
+  font-size: 22px;
+}
+
+/* ------------------------------------------------------------
+   CONTENIDO
+------------------------------------------------------------ */
+
+.hierarchy-modal-content h3 {
+  margin: 0 0 10px;
+
+  font-size: 19px;
+  font-weight: 600;
+
+  color: #343a40;
+}
+
+.hierarchy-modal-content p {
+  margin: 0;
+
+  font-size: 14px;
+  line-height: 1.55;
+
+  color: #5f6368;
+}
+
+/* ------------------------------------------------------------
+   AVISO
+------------------------------------------------------------ */
+
+.hierarchy-modal-warning {
+  margin-top: 16px;
+
+  padding: 11px 13px;
+
+  border-radius: 7px;
+
+  background: rgba(255, 193, 7, 0.1);
+
+  border: 1px solid rgba(255, 193, 7, 0.3);
+
+  color: #6b5500;
+
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* ------------------------------------------------------------
+   BOTONES
+------------------------------------------------------------ */
+
+.hierarchy-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  margin-top: 26px;
+}
+
+.hierarchy-modal-btn {
+  min-width: 100px;
+
+  padding: 9px 17px;
+
+  border-radius: 7px;
+
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+
+  cursor: pointer;
+
+  transition: background 0.15s ease, border-color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.hierarchy-modal-btn:active {
+  transform: scale(0.98);
+}
+
+/* ------------------------------------------------------------
+   CANCELAR
+------------------------------------------------------------ */
+
+.hierarchy-modal-btn-secondary {
+  background: #ffffff;
+
+  border: 1px solid #d6d9dc;
+
+  color: #343a40;
+}
+
+.hierarchy-modal-btn-secondary:hover {
+  background: #f5f6f7;
+
+  border-color: #c4c8cc;
+}
+
+/* ------------------------------------------------------------
+   ELIMINAR
+------------------------------------------------------------ */
+
+.hierarchy-modal-btn-danger {
+  background: #dc3545;
+
+  border: 1px solid #dc3545;
+
+  color: #ffffff;
+}
+
+.hierarchy-modal-btn-danger:hover {
+  background: #c82333;
+
+  border-color: #c82333;
+}
+
+/* ------------------------------------------------------------
+   BOTÓN ELIMINAR DEL ÁRBOL
+------------------------------------------------------------ */
+
+.hierarchy-delete {
+  margin-left: auto;
+
+  border: none;
+
+  background: transparent;
+
+  cursor: pointer;
+
+  font-size: 15px;
+
+  opacity: 0.6;
+
+  padding: 4px 6px;
+
+  border-radius: 5px;
+
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.hierarchy-delete:hover {
+  opacity: 1;
+
+  background: rgba(220, 53, 69, 0.08);
+
+  transform: scale(1.08);
+}
+
+.hierarchy-delete:active {
+  transform: scale(0.95);
+}

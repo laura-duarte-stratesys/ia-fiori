@@ -458,5 +458,64 @@
       </footer>
     </main>
     <script type="module" src="/src/main.js"></script>
+    <!-- ============================================================
+     MODAL DE CONFIRMACIÓN DE JERARQUÍA
+============================================================ -->
+
+<div id="hierarchy-modal-overlay" class="hierarchy-modal-overlay">
+  <div
+    id="hierarchy-modal"
+    class="hierarchy-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="hierarchy-modal-title"
+  >
+
+    <div class="hierarchy-modal-icon">
+      🗑️
+    </div>
+
+    <div class="hierarchy-modal-content">
+
+      <h3 id="hierarchy-modal-title">
+        Eliminar elemento
+      </h3>
+
+      <p id="hierarchy-modal-message">
+        ¿Seguro que quieres eliminar este elemento?
+      </p>
+
+      <div
+        id="hierarchy-modal-warning"
+        class="hierarchy-modal-warning"
+        style="display: none;"
+      >
+        ⚠️ También se eliminarán todos sus elementos hijos.
+      </div>
+
+    </div>
+
+    <div class="hierarchy-modal-actions">
+
+      <button
+        type="button"
+        id="hierarchy-modal-cancel"
+        class="hierarchy-modal-btn hierarchy-modal-btn-secondary"
+      >
+        Cancelar
+      </button>
+
+      <button
+        type="button"
+        id="hierarchy-modal-confirm"
+        class="hierarchy-modal-btn hierarchy-modal-btn-danger"
+      >
+        Eliminar
+      </button>
+
+    </div>
+
+  </div>
+</div>
   </body>
 </html>

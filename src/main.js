@@ -518,27 +518,59 @@ function processHierarchy(rows, cuentasMap, hierarchyId, hierarchyDesc) {
 
   /* ==========================================================
      CONSTRUIR PADRES
-     
-     NODO:
-       1      → raíz
-       11     → padre 1
-       111    → padre 11
-       211    → padre 21
 
-     CUENTA / HOJA:
-       pertenece al último nodo encontrado.
+     REGLA:
+
+     NODO = número de 1 a 4 dígitos
+
+       1      → Z_BS_PL
+       11     → 1
+       111    → 11
+       1111   → 111
+       1112   → 111
+
+     POSICIÓN DE CUENTA = cualquier otro ID numérico,
+     incluyendo números de 5 o 6 dígitos.
+
+     La posición de cuenta pertenece al último Nodo
+     encontrado en el orden del Excel.
+
+     Ejemplo:
+
+       1111   → Nodo
+       20500  → 1111
+       20510  → 1111
+       28050  → 1111
+       28051  → 1111
+       1112   → Nodo
+       30000  → 1112
   ========================================================== */
 
   let ultimoNodo = '';
 
-  records.forEach((record) => {
+  records.forEach((record, index) => {
     if (!record.id) return;
 
-    /* --------------------------------------------------------
-       NODO: entre 1 y 6 dígitos
-    -------------------------------------------------------- */
+    /*
+     * ========================================================
+     * NODO
+     *
+     * IMPORTANTE:
+     * Solo 1 a 4 dígitos.
+     *
+     * Esto evita que cuentas como:
+     * 20500
+     * 20510
+     * 28050
+     * 28051
+     *
+     * sean interpretadas como nodos.
+     * ========================================================
+     */
 
-    if (/^\d{1,6}$/.test(record.id)) {
+    const esNodoNumerico = /^\d{1,4}$/.test(record.id);
+
+    if (esNodoNumerico) {
       // Primer nivel
       if (record.id.length === 1) {
         record.parentId = hierarchyRootId;
@@ -567,9 +599,13 @@ function processHierarchy(rows, cuentasMap, hierarchyId, hierarchyDesc) {
       return;
     }
 
-    /* --------------------------------------------------------
-       CUENTA / HOJA
-    -------------------------------------------------------- */
+    /*
+     * ========================================================
+     * POSICIÓN DE CUENTA / HOJA
+     *
+     * Se asigna al último nodo encontrado.
+     * ========================================================
+     */
 
     if (ultimoNodo) {
       record.parentId = ultimoNodo;
@@ -589,9 +625,41 @@ function processHierarchy(rows, cuentasMap, hierarchyId, hierarchyDesc) {
   /* ==========================================================
      VALIDAR PADRES
   ========================================================== */
-
   records.forEach((record) => {
     const parentKey = normalizeKey(record.parentId);
+    const idKey = normalizeKey(record.id);
+
+    /*
+     * ========================================================
+     * UN REGISTRO NO PUEDE SER SU PROPIO PADRE
+     * ========================================================
+     */
+
+    if (idKey && parentKey && idKey === parentKey) {
+      record.valid = false;
+
+      incidents.push({
+        severity: 'Error',
+        row: record.originalRow,
+        id: record.id,
+        message: 'El registro no puede ser su propio padre.',
+      });
+
+      /*
+       * Eliminamos el parentId para evitar que el render
+       * entre en recursión infinita.
+       */
+
+      record.parentId = 'REVISAR';
+
+      return;
+    }
+
+    /*
+     * ========================================================
+     * PADRE INEXISTENTE
+     * ========================================================
+     */
 
     if (
       record.parentId &&
@@ -617,15 +685,15 @@ function processHierarchy(rows, cuentasMap, hierarchyId, hierarchyDesc) {
   const childrenMap = new Map();
 
   records.forEach((record) => {
-    if (!record.parentId) return;
+    const parentKey = normalizeKey(record.parentId);
 
-    const key = normalizeKey(record.parentId);
+    if (!parentKey) return;
 
-    if (!childrenMap.has(key)) {
-      childrenMap.set(key, []);
+    if (!childrenMap.has(parentKey)) {
+      childrenMap.set(parentKey, []);
     }
 
-    childrenMap.get(key).push(record);
+    childrenMap.get(parentKey).push(record);
   });
 
   /* ==========================================================
@@ -716,7 +784,22 @@ function processHierarchy(rows, cuentasMap, hierarchyId, hierarchyDesc) {
   /* ==========================================================
      RESULTADO
   ========================================================== */
+  /* ==========================================================
+   DEBUG CICLOS / AUTO-PADRES
+========================================================== */
 
+  records.forEach((record) => {
+    const idKey = normalizeKey(record.id);
+    const parentKey = normalizeKey(record.parentId);
+
+    if (idKey && parentKey && idKey === parentKey) {
+      console.error('🚨 AUTO-PADRE DETECTADO:', {
+        id: record.id,
+        parentId: record.parentId,
+        originalRow: record.originalRow,
+      });
+    }
+  });
   return {
     records,
     incidents,
@@ -965,28 +1048,495 @@ function buildHierarchyTreeMap(records) {
 
   return map;
 }
+/* ============================================================
+ * DRAG & DROP DE JERARQUÍA
+ * ============================================================ */
+
+function enableHierarchyDragAndDrop(wrapper, record) {
+  wrapper.draggable = true;
+
+  wrapper.addEventListener('dragstart', (event) => {
+    if (event.target.closest('.hierarchy-delete')) {
+      event.preventDefault();
+      return;
+    }
+    event.stopPropagation();
+
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', normalizeKey(record.id));
+
+    wrapper.classList.add('hierarchy-dragging');
+  });
+
+  wrapper.addEventListener('dragend', (event) => {
+    if (event.target.closest('.hierarchy-delete')) {
+      event.preventDefault();
+      return;
+    }
+    event.stopPropagation();
+
+    wrapper.classList.remove('hierarchy-dragging');
+
+    document.querySelectorAll('.hierarchy-drop-target').forEach((element) => {
+      element.classList.remove('hierarchy-drop-target');
+    });
+  });
+
+  wrapper.addEventListener('dragover', (event) => {
+    if (event.target.closest('.hierarchy-delete')) {
+      event.preventDefault();
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+
+    const draggedId = event.dataTransfer.getData('text/plain');
+
+    if (!draggedId) {
+      return;
+    }
+
+    const targetId = normalizeKey(record.id);
+
+    /*
+     * No permitimos soltarse sobre sí mismo.
+     */
+
+    if (draggedId === targetId) {
+      return;
+    }
+
+    /*
+     * Comprobamos que el destino sea un Nodo.
+     */
+
+    const result = RESULT;
+
+    if (!result?.records?.length) {
+      return;
+    }
+
+    const targetRecord = result.records.find(
+      (item) => normalizeKey(item.id) === targetId
+    );
+
+    if (!targetRecord) {
+      return;
+    }
+
+    const hasChildren = result.records.some(
+      (item) => normalizeKey(item.parentId) === targetId
+    );
+
+    /*
+     * Solo se puede soltar sobre un Nodo.
+     */
+
+    if (!hasChildren) {
+      return;
+    }
+
+    /*
+     * Evitar introducir un nodo dentro
+     * de uno de sus propios descendientes.
+     */
+
+    if (isHierarchyDescendant(draggedId, targetId, result.records)) {
+      return;
+    }
+
+    event.dataTransfer.dropEffect = 'move';
+
+    wrapper.classList.add('hierarchy-drop-target');
+  });
+
+  wrapper.addEventListener('dragleave', (event) => {
+    event.stopPropagation();
+
+    /*
+     * Solo quitamos el efecto si realmente
+     * salimos del elemento.
+     */
+
+    if (!wrapper.contains(event.relatedTarget)) {
+      wrapper.classList.remove('hierarchy-drop-target');
+    }
+  });
+
+  wrapper.addEventListener('drop', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    wrapper.classList.remove('hierarchy-drop-target');
+
+    const draggedId = event.dataTransfer.getData('text/plain');
+
+    if (!draggedId) {
+      return;
+    }
+
+    moveHierarchyRecord(draggedId, normalizeKey(record.id));
+  });
+}
+
+/*
+ * ============================================================
+ * COMPROBAR SI targetId ES DESCENDIENTE DE draggedId
+ * ============================================================
+ */
+
+function isHierarchyDescendant(draggedId, targetId, records) {
+  let currentId = targetId;
+
+  const visited = new Set();
+
+  while (currentId) {
+    const currentKey = normalizeKey(currentId);
+
+    if (visited.has(currentKey)) {
+      return true;
+    }
+
+    visited.add(currentKey);
+
+    if (currentKey === normalizeKey(draggedId)) {
+      return true;
+    }
+
+    const currentRecord = records.find(
+      (record) => normalizeKey(record.id) === currentKey
+    );
+
+    if (!currentRecord) {
+      return false;
+    }
+
+    currentId = currentRecord.parentId;
+  }
+
+  return false;
+}
+
+/*
+ * ============================================================
+ * MOVER REGISTRO
+ * ============================================================
+ */
+
+function moveHierarchyRecord(draggedId, targetId) {
+  if (!RESULT?.records?.length) {
+    return;
+  }
+
+  const draggedRecord = RESULT.records.find(
+    (record) => normalizeKey(record.id) === normalizeKey(draggedId)
+  );
+
+  const targetRecord = RESULT.records.find(
+    (record) => normalizeKey(record.id) === normalizeKey(targetId)
+  );
+
+  if (!draggedRecord || !targetRecord) {
+    return;
+  }
+
+  /*
+   * No permitir moverse sobre sí mismo.
+   */
+
+  if (normalizeKey(draggedRecord.id) === normalizeKey(targetRecord.id)) {
+    return;
+  }
+
+  /*
+   * Solo los nodos pueden recibir hijos.
+   */
+
+  const targetHasChildren = RESULT.records.some(
+    (record) => normalizeKey(record.parentId) === normalizeKey(targetRecord.id)
+  );
+
+  if (!targetHasChildren) {
+    alert('Solo puedes mover elementos dentro de un Nodo.');
+
+    return;
+  }
+
+  /*
+   * Evitar ciclos.
+   */
+
+  if (
+    isHierarchyDescendant(draggedRecord.id, targetRecord.id, RESULT.records)
+  ) {
+    alert(
+      'No puedes mover un elemento dentro de uno de sus propios descendientes.'
+    );
+
+    return;
+  }
+
+  /*
+   * Actualizamos el padre.
+   */
+
+  draggedRecord.parentId = targetRecord.id;
+
+  /*
+   * Recalculamos niveles.
+   */
+
+  const hierarchyId = normalize($('f-id')?.value);
+
+  calculateLevels(RESULT.records, hierarchyId);
+
+  /*
+   * Volvemos a dibujar el árbol.
+   */
+
+  renderHierarchyTree(RESULT, true);
+
+  /*
+   * Actualizamos incidencias por si la estructura
+   * ha cambiado alguna validación.
+   */
+
+  if (typeof refreshHierarchyIncidents === 'function') {
+    refreshHierarchyIncidents();
+  }
+}
+/* ============================================================
+ * ELIMINAR ELEMENTO DE LA JERARQUÍA
+ * ============================================================ */
+
+function deleteHierarchyRecord(recordId) {
+  console.log('🗑️ DELETE EJECUTADO:', recordId);
+
+  if (!RESULT?.records?.length) {
+    return;
+  }
+
+  const record = RESULT.records.find(
+    (item) => normalizeKey(item.id) === normalizeKey(recordId)
+  );
+
+  if (!record) {
+    console.warn('No se encontró el registro:', recordId);
+
+    return;
+  }
+
+  /* ============================================================
+     PROTEGER LA RAÍZ DE LA JERARQUÍA
+  ============================================================ */
+
+  const hierarchyId = normalize($('f-id')?.value);
+
+  if (normalizeKey(record.id) === normalizeKey(hierarchyId)) {
+    return;
+  }
+
+  /* ============================================================
+     COMPROBAR SI TIENE HIJOS
+  ============================================================ */
+
+  const children = RESULT.records.filter(
+    (item) => normalizeKey(item.parentId) === normalizeKey(record.id)
+  );
+
+  const hasChildren = children.length > 0;
+
+  /* ============================================================
+     ABRIR MODAL DE CONFIRMACIÓN
+  ============================================================ */
+
+  showHierarchyConfirmModal({
+    title: 'Eliminar elemento',
+
+    message: `¿Seguro que quieres eliminar "${
+      record.descripcion || record.id
+    }"?`,
+
+    hasChildren,
+
+    onConfirm: () => {
+      console.log('🗑️ CONFIRMACIÓN DE ELIMINACIÓN:', record.id);
+
+      /* ========================================================
+         OBTENER TODA LA RAMA A ELIMINAR
+      ======================================================== */
+
+      const idsToDelete = new Set([normalizeKey(record.id)]);
+
+      let changed = true;
+
+      while (changed) {
+        changed = false;
+
+        RESULT.records.forEach((item) => {
+          const itemParent = normalizeKey(item.parentId);
+
+          const itemId = normalizeKey(item.id);
+
+          if (
+            itemParent &&
+            idsToDelete.has(itemParent) &&
+            !idsToDelete.has(itemId)
+          ) {
+            idsToDelete.add(itemId);
+
+            changed = true;
+          }
+        });
+      }
+
+      console.log('🗑️ IDS A ELIMINAR:', [...idsToDelete]);
+
+      /* ========================================================
+         ELIMINAR REGISTROS
+      ======================================================== */
+
+      RESULT.records = RESULT.records.filter(
+        (item) => !idsToDelete.has(normalizeKey(item.id))
+      );
+
+      console.log('📊 Registros restantes:', RESULT.records.length);
+
+      /* ========================================================
+         RECALCULAR NIVELES
+      ======================================================== */
+
+      calculateLevels(RESULT.records, hierarchyId);
+
+      /* ========================================================
+         ACTUALIZAR INCIDENCIAS
+      ======================================================== */
+
+      if (typeof refreshHierarchyIncidents === 'function') {
+        refreshHierarchyIncidents();
+      }
+
+      /* ========================================================
+         ACTUALIZAR RESUMEN
+      ======================================================== */
+
+      const summary = buildSummary(
+        RESULT.records,
+        RESULT.incidents,
+        hierarchyId
+      );
+
+      renderSummary($('summary-bar'), summary);
+
+      /* ========================================================
+         REDIBUJAR ÁRBOL
+      ======================================================== */
+
+      renderHierarchyTree(RESULT, true);
+
+      /* ========================================================
+         LOG FINAL
+      ======================================================== */
+
+      console.log('✅ Eliminación completada.', {
+        eliminado: record.id,
+        elementosEliminados: idsToDelete.size,
+        registrosRestantes: RESULT.records.length,
+        resumen: summary,
+      });
+    },
+  });
+}
 
 /*
  * Crea visualmente un nodo y todos sus hijos.
  */
+function createHierarchyTreeNode(
+  record,
+  childrenMap,
+  expanded = true,
+  path = new Set()
+) {
+  const recordKey = normalizeKey(record.id);
 
-function createHierarchyTreeNode(record, childrenMap, expanded = true) {
-  const children = childrenMap.get(normalizeKey(record.id)) || [];
+  /*
+   * ========================================================
+   * PROTECCIÓN CONTRA CICLOS
+   * ========================================================
+   */
+
+  if (recordKey && path.has(recordKey)) {
+    console.error('🚨 Ciclo detectado durante el render:', {
+      id: record.id,
+      parentId: record.parentId,
+    });
+
+    const cycleNode = document.createElement('div');
+
+    cycleNode.className = 'hierarchy-node hierarchy-node-error';
+
+    cycleNode.innerHTML = `
+      <div class="hierarchy-node-row hierarchy-node-error">
+        <span class="hierarchy-toggle">⚠️</span>
+        <span class="hierarchy-icon">🔄</span>
+        <span class="hierarchy-id">
+          ${escapeHtml(record.id)}
+        </span>
+        <span class="hierarchy-description">
+          Ciclo detectado en la jerarquía
+        </span>
+        <span class="hierarchy-type">Error</span>
+      </div>
+    `;
+
+    return cycleNode;
+  }
+
+  /*
+   * ========================================================
+   * PATH DE LA RAMA ACTUAL
+   * ========================================================
+   */
+
+  const currentPath = new Set(path);
+
+  if (recordKey) {
+    currentPath.add(recordKey);
+  }
+
+  /*
+   * ========================================================
+   * HIJOS
+   * ========================================================
+   */
+
+  const children = childrenMap.get(recordKey) || [];
 
   const hasChildren = children.length > 0;
+
+  /*
+   * ========================================================
+   * WRAPPER PRINCIPAL
+   * ========================================================
+   */
 
   const wrapper = document.createElement('div');
 
   wrapper.className = 'hierarchy-node';
 
-  /*
-   * Guardamos información para expandir/contraer.
-   */
-
   wrapper.dataset.id = record.id;
 
   /*
-   * CONTENEDOR DEL NODO
+   * IMPORTANTE:
+   *
+   * El wrapper NO es draggable.
+   * Solo la fila será draggable.
+   */
+
+  /*
+   * ========================================================
+   * FILA DEL ELEMENTO
+   * ========================================================
    */
 
   const nodeRow = document.createElement('div');
@@ -994,7 +1544,19 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
   nodeRow.className = 'hierarchy-node-row';
 
   /*
-   * Botón expandir/contraer
+   * ========================================================
+   * DRAG & DROP
+   * ========================================================
+   *
+   * Solo la fila se puede arrastrar.
+   */
+
+  enableHierarchyDragAndDrop(nodeRow, record);
+
+  /*
+   * ========================================================
+   * BOTÓN EXPANDIR / CONTRAER
+   * ========================================================
    */
 
   const toggle = document.createElement('button');
@@ -1005,15 +1567,20 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
 
   if (hasChildren) {
     toggle.textContent = expanded ? '▼' : '▶';
+
     toggle.title = expanded ? 'Contraer' : 'Expandir';
   } else {
     toggle.textContent = '•';
+
     toggle.classList.add('leaf');
+
     toggle.disabled = true;
   }
 
   /*
-   * Icono
+   * ========================================================
+   * ICONO
+   * ========================================================
    */
 
   const icon = document.createElement('span');
@@ -1023,7 +1590,9 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
   icon.textContent = hasChildren ? '📁' : '📄';
 
   /*
+   * ========================================================
    * ID
+   * ========================================================
    */
 
   const id = document.createElement('span');
@@ -1033,7 +1602,9 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
   id.textContent = record.id;
 
   /*
-   * Descripción
+   * ========================================================
+   * DESCRIPCIÓN
+   * ========================================================
    */
 
   const description = document.createElement('span');
@@ -1043,17 +1614,75 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
   description.textContent = record.descripcion;
 
   /*
-   * Tipo
+   * ========================================================
+   * TIPO
+   * ========================================================
    */
 
   const type = document.createElement('span');
 
   type.className = 'hierarchy-type';
 
-  type.textContent = record.tipo;
+  /*
+   * Visualmente determinamos el tipo
+   * por estructura real.
+   */
+
+  type.textContent = hasChildren
+    ? 'Nodo'
+    : 'Posición de cuenta de explotación de consolidación';
 
   /*
-   * Si hay error en el registro
+   * ========================================================
+   * BOTÓN ELIMINAR
+   * ========================================================
+   */
+
+  const deleteButton = document.createElement('button');
+
+  deleteButton.type = 'button';
+
+  deleteButton.className = 'hierarchy-delete';
+
+  deleteButton.textContent = '🗑️';
+
+  deleteButton.title = 'Eliminar';
+
+  /*
+   * El botón NO participa en Drag & Drop.
+   */
+
+  deleteButton.draggable = false;
+
+  /*
+   * Evitar que el botón provoque
+   * acciones del Drag & Drop.
+   */
+
+  deleteButton.addEventListener('mousedown', (event) => {
+    event.stopPropagation();
+  });
+
+  deleteButton.addEventListener('dragstart', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  });
+
+  /*
+   * CLICK ELIMINAR
+   */
+
+  deleteButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    deleteHierarchyRecord(record.id);
+  });
+
+  /*
+   * ========================================================
+   * ERROR
+   * ========================================================
    */
 
   if (record.valid === false) {
@@ -1061,19 +1690,29 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
   }
 
   /*
-   * Armamos la fila
+   * ========================================================
+   * ARMAR FILA
+   * ========================================================
    */
 
   nodeRow.appendChild(toggle);
+
   nodeRow.appendChild(icon);
+
   nodeRow.appendChild(id);
+
   nodeRow.appendChild(description);
+
   nodeRow.appendChild(type);
+
+  nodeRow.appendChild(deleteButton);
 
   wrapper.appendChild(nodeRow);
 
   /*
+   * ========================================================
    * CONTENEDOR DE HIJOS
+   * ========================================================
    */
 
   if (hasChildren) {
@@ -1085,8 +1724,17 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
       childrenContainer.style.display = 'none';
     }
 
+    /*
+     * Crear hijos.
+     */
+
     children.forEach((child) => {
-      const childNode = createHierarchyTreeNode(child, childrenMap, expanded);
+      const childNode = createHierarchyTreeNode(
+        child,
+        childrenMap,
+        expanded,
+        currentPath
+      );
 
       childrenContainer.appendChild(childNode);
     });
@@ -1094,10 +1742,15 @@ function createHierarchyTreeNode(record, childrenMap, expanded = true) {
     wrapper.appendChild(childrenContainer);
 
     /*
-     * Expandir / contraer
+     * ======================================================
+     * EXPANDIR / CONTRAER
+     * ======================================================
      */
 
-    toggle.addEventListener('click', () => {
+    toggle.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
       const isVisible = childrenContainer.style.display !== 'none';
 
       childrenContainer.style.display = isVisible ? 'none' : '';
@@ -1185,7 +1838,136 @@ function renderHierarchyTree(result, expanded = true) {
     `;
   }
 }
+/* ============================================================
+   MODAL DE CONFIRMACIÓN DE JERARQUÍA
+============================================================ */
 
+let hierarchyModalCallback = null;
+
+/**
+ * Abre el modal de confirmación.
+ *
+ * @param {Object} options
+ * @param {string} options.title
+ * @param {string} options.message
+ * @param {boolean} options.hasChildren
+ * @param {Function} options.onConfirm
+ */
+function showHierarchyConfirmModal({
+  title = 'Eliminar elemento',
+  message = '¿Seguro que quieres eliminar este elemento?',
+  hasChildren = false,
+  onConfirm = null,
+}) {
+  const overlay = document.getElementById('hierarchy-modal-overlay');
+
+  const titleElement = document.getElementById('hierarchy-modal-title');
+
+  const messageElement = document.getElementById('hierarchy-modal-message');
+
+  const warningElement = document.getElementById('hierarchy-modal-warning');
+
+  if (!overlay) {
+    console.error('No se encontró #hierarchy-modal-overlay');
+
+    return;
+  }
+
+  titleElement.textContent = title;
+
+  messageElement.textContent = message;
+
+  warningElement.style.display = hasChildren ? 'block' : 'none';
+
+  hierarchyModalCallback = onConfirm;
+
+  overlay.classList.add('show');
+
+  document.body.classList.add('hierarchy-modal-open');
+
+  setTimeout(() => {
+    const confirmButton = document.getElementById('hierarchy-modal-confirm');
+
+    confirmButton?.focus();
+  }, 50);
+}
+
+/**
+ * Cierra el modal.
+ */
+function closeHierarchyConfirmModal() {
+  const overlay = document.getElementById('hierarchy-modal-overlay');
+
+  if (!overlay) return;
+
+  overlay.classList.remove('show');
+
+  document.body.classList.remove('hierarchy-modal-open');
+
+  hierarchyModalCallback = null;
+}
+
+/* ------------------------------------------------------------
+   EVENTOS DEL MODAL
+------------------------------------------------------------ */
+
+document.addEventListener('DOMContentLoaded', () => {
+  const overlay = document.getElementById('hierarchy-modal-overlay');
+
+  const cancelButton = document.getElementById('hierarchy-modal-cancel');
+
+  const confirmButton = document.getElementById('hierarchy-modal-confirm');
+
+  if (!overlay) return;
+
+  /* Cancelar */
+
+  cancelButton?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    closeHierarchyConfirmModal();
+  });
+
+  /* Confirmar */
+
+  confirmButton?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const callback = hierarchyModalCallback;
+
+    closeHierarchyConfirmModal();
+
+    if (typeof callback === 'function') {
+      callback();
+    }
+  });
+
+  /* Cerrar haciendo click fuera */
+
+  overlay.addEventListener('click', (event) => {
+    if (event.target !== overlay) {
+      return;
+    }
+
+    closeHierarchyConfirmModal();
+  });
+
+  /* ESC */
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    if (!overlay.classList.contains('show')) {
+      return;
+    }
+
+    closeHierarchyConfirmModal();
+  });
+});
 /*
  * Expande toda la jerarquía.
  */
@@ -1955,14 +2737,16 @@ async function suggestWithAI() {
   // 1. PREPARAR ESTRUCTURA ORIGINAL
   // ============================================================
 
-  const estructuraIA = RESULT.records.map((x, index) => ({
-    orden: index + 1,
-    id: String(x.id ?? '').trim(),
-    descripcion: String(x.descripcion ?? '').trim(),
-    padre_original: String(x.parentId ?? '').trim(),
-    nivel_original: Number(x.level ?? 0),
-    tipo_original: String(x.tipo ?? '').trim(),
-  }));
+  const estructuraIA = RESULT.records
+    .filter((x) => String(x.id ?? '').trim() !== '')
+    .map((x, index) => ({
+      orden: index + 1,
+      id: String(x.id ?? '').trim(),
+      descripcion: String(x.descripcion ?? '').trim(),
+      padre_original: String(x.parentId ?? '').trim(),
+      nivel_original: Number(x.level ?? 0),
+      tipo_original: String(x.tipo ?? '').trim(),
+    }));
 
   if (!estructuraIA.length) {
     statusLine.textContent = 'No hay registros para analizar.';
@@ -2155,9 +2939,22 @@ async function suggestWithAI() {
     // 9. DETERMINAR CAMBIOS
     // ============================================================
 
-    const cambios = resultadoIA.filter(
-      (item) => item.cambio_propuesto === true
-    );
+    const cambios = resultadoIA.filter((item) => {
+      const padreOriginal = normalize(item.padre_original);
+      const padreSugerido = normalize(item.padre_sugerido);
+
+      const nivelOriginal = Number(item.nivel_original);
+      const nivelSugerido = Number(item.nivel_sugerido);
+
+      const tipoOriginal = normalize(item.tipo_original);
+      const tipoSugerido = normalize(item.tipo_sugerido);
+
+      return (
+        padreOriginal !== padreSugerido ||
+        nivelOriginal !== nivelSugerido ||
+        tipoOriginal !== tipoSugerido
+      );
+    });
 
     // ============================================================
     // 10. MOSTRAR RESULTADO
@@ -2390,21 +3187,133 @@ function applyAISuggestions() {
 
     if (!suggestion) return;
 
-    const record = RESULT.records.find(
-      (r) => normalizeKey(r.id) === normalizeKey(suggestion.id)
-    );
+    const suggestionId = normalize(suggestion.id);
 
-    if (!record) return;
+    // ----------------------------------------------------------
+    // VALIDAR ID
+    // ----------------------------------------------------------
 
-    // No modificar raíz
-    if (record.index === 0 || record.tipo === 'Raíz') {
+    if (!suggestionId) {
+      console.warn('⚠️ Se ignoró una sugerencia sin ID:', suggestion);
       return;
     }
 
-    // Guardar cambio
-    record.parentId = normalize(suggestion.padre_sugerido);
+    const record = RESULT.records.find(
+      (r) => r.index !== 0 && normalizeKey(r.id) === normalizeKey(suggestionId)
+    );
 
-    record.level = Number(suggestion.nivel_sugerido);
+    if (!record) {
+      console.warn(
+        '⚠️ No se encontró el registro para aplicar la sugerencia:',
+        suggestion
+      );
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // NO MODIFICAR RAÍZ
+    // ----------------------------------------------------------
+
+    if (record.tipo === 'Raíz' || record.index === 0) {
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // COMPARAR CAMBIO REAL
+    // ----------------------------------------------------------
+
+    const padreOriginal = normalize(record.parentId);
+    const padreSugerido = normalize(suggestion.padre_sugerido);
+
+    const nivelOriginal = Number(record.level);
+    const nivelSugerido = Number(suggestion.nivel_sugerido);
+
+    const tipoOriginal = normalize(record.tipo);
+    const tipoSugerido = normalize(suggestion.tipo_sugerido || record.tipo);
+
+    const cambioPadre = padreOriginal !== padreSugerido;
+
+    const cambioNivel = nivelOriginal !== nivelSugerido;
+
+    const cambioTipo = tipoOriginal !== tipoSugerido;
+
+    const hayCambioReal = cambioPadre || cambioNivel || cambioTipo;
+
+    // ----------------------------------------------------------
+    // SI NO HAY CAMBIO REAL, NO HACER NADA
+    // ----------------------------------------------------------
+
+    if (!hayCambioReal) {
+      console.warn(
+        'ℹ️ Sugerencia ignorada porque no supone un cambio real:',
+        suggestion
+      );
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // VALIDAR PADRE SUGERIDO
+    // ----------------------------------------------------------
+
+    if (padreSugerido) {
+      const padreExiste = RESULT.records.some(
+        (r) => normalizeKey(r.id) === normalizeKey(padreSugerido)
+      );
+
+      if (!padreExiste) {
+        console.warn('⚠️ Sugerencia ignorada: el padre no existe:', suggestion);
+        return;
+      }
+    }
+
+    // ----------------------------------------------------------
+    // EVITAR AUTO-PADRE
+    // ----------------------------------------------------------
+
+    if (
+      padreSugerido &&
+      normalizeKey(record.id) === normalizeKey(padreSugerido)
+    ) {
+      console.warn(
+        '⚠️ Sugerencia ignorada: el registro sería su propio padre:',
+        suggestion
+      );
+      return;
+    }
+
+    // ----------------------------------------------------------
+    // VALIDAR NIVEL CON EL PADRE
+    // ----------------------------------------------------------
+
+    if (padreSugerido) {
+      const padreRecord = RESULT.records.find(
+        (r) => normalizeKey(r.id) === normalizeKey(padreSugerido)
+      );
+
+      if (padreRecord) {
+        const nivelEsperado = Number(padreRecord.level) + 1;
+
+        if (nivelSugerido !== nivelEsperado) {
+          console.warn(
+            '⚠️ Sugerencia ignorada: nivel incompatible con el padre:',
+            {
+              id: record.id,
+              padre: padreSugerido,
+              nivelSugerido,
+              nivelEsperado,
+            }
+          );
+          return;
+        }
+      }
+    }
+
+    // ----------------------------------------------------------
+    // APLICAR CAMBIO
+    // ----------------------------------------------------------
+
+    record.parentId = padreSugerido;
+    record.level = nivelSugerido;
 
     if (suggestion.tipo_sugerido) {
       record.tipo = suggestion.tipo_sugerido;
@@ -2443,6 +3352,7 @@ function applyAISuggestions() {
   // ============================================================
   // REDIBUJAR
   // ============================================================
+
   refreshHierarchyIncidents();
   renderHierarchyTree(RESULT);
 
@@ -2576,8 +3486,8 @@ function parsePlanWorkbook(workbook) {
    * Por eso originalRow = index + 2.
    */
 
-  return rows
-    .map((row, index) => ({
+  return rows.map((row, index) => {
+    return {
       originalRow: index + 2,
 
       cuentaLocal: normalize(row[columns.cuentaLocal]),
@@ -2591,16 +3501,8 @@ function parsePlanWorkbook(workbook) {
       typelim: normalize(row[columns.typelim]),
 
       conversion: normalize(row[columns.conversion]),
-    }))
-    .filter(
-      (row) =>
-        row.cuentaLocal ||
-        row.cuenta ||
-        row.descripcion ||
-        row.acctype ||
-        row.typelim ||
-        row.conversion
-    );
+    };
+  });
 }
 
 /* ============================================================
@@ -2608,77 +3510,94 @@ function parsePlanWorkbook(workbook) {
 ============================================================ */
 
 function normalizeAcctype(value) {
-  const text = normalize(value).toUpperCase();
+  const text = normalize(value).trim().toUpperCase();
 
-  if (text.includes('AST')) return 'AST -- Activo';
-  if (text.includes('LEQ')) return 'LEQ -- Pasivo';
-  if (text.includes('INC')) return 'INC -- Ingreso';
-  if (text.includes('EXP')) return 'EXP -- Gasto';
+  if (/^AST(\s|$)/.test(text)) return 'AST -- Activo';
+  if (/^LEQ(\s|$)/.test(text)) return 'LEQ -- Pasivo';
+  if (/^INC(\s|$)/.test(text)) return 'INC -- Ingreso';
+  if (/^EXP(\s|$)/.test(text)) return 'EXP -- Gasto';
 
   return text;
-}
-function sonDuplicadosExactos(a, b) {
-  return (
-    normalizeAIValue(a.cuenta) === normalizeAIValue(b.cuenta) &&
-    normalizeAIValue(a.descripcion) === normalizeAIValue(b.descripcion) &&
-    normalizeAIValue(a.acctype) === normalizeAIValue(b.acctype) &&
-    normalizeAIValue(a.typelim) === normalizeAIValue(b.typelim) &&
-    normalizeAIValue(a.conversion) === normalizeAIValue(b.conversion)
-  );
 }
 
 function detectarDuplicadosExactos(registros) {
   const duplicados = [];
-  const grupos = new Map();
+  const vistos = new Map();
 
   registros.forEach((registro) => {
-    const cuenta = normalizeAIValue(registro.cuenta);
+    /*
+     * ============================================================
+     * CLAVE DE DUPLICADO EXACTO
+     * ============================================================
+     *
+     * Dos registros solo son duplicados si TODOS estos campos
+     * son exactamente iguales:
+     *
+     * - CUENTA LOCAL
+     * - CTA. GRUPO
+     * - DESCRIPTION
+     * - ACCTYPE
+     * - TYPELIM
+     * - CONVERSION
+     */
 
-    if (!cuenta) return;
+    const key = [
+      normalizeAIValue(registro.cuentaLocal),
+      normalizeAIValue(registro.cuenta),
+      normalizeAIValue(registro.descripcion),
+      normalizeAIValue(registro.acctype),
+      normalizeAIValue(registro.typelim),
+      normalizeAIValue(registro.conversion),
+    ].join('|');
 
-    if (!grupos.has(cuenta)) {
-      grupos.set(cuenta, []);
+    /*
+     * Si no hay datos suficientes, no analizamos el registro.
+     */
+    if (!key.replace(/\|/g, '')) {
+      return;
     }
 
-    grupos.get(cuenta).push(registro);
-  });
+    /*
+     * ------------------------------------------------------------
+     * PRIMERA VEZ QUE APARECE
+     * ------------------------------------------------------------
+     */
 
-  grupos.forEach((items) => {
-    if (items.length < 2) return;
+    if (!vistos.has(key)) {
+      vistos.set(key, registro);
+      return;
+    }
 
-    const conservar = items[0];
+    /*
+     * ------------------------------------------------------------
+     * YA EXISTE UN REGISTRO EXACTAMENTE IGUAL
+     * ------------------------------------------------------------
+     */
 
-    items.slice(1).forEach((registro) => {
-      if (sonDuplicadosExactos(conservar, registro)) {
-        duplicados.push({
-          cuentaLocal: registro.cuentaLocal,
-          cuenta: registro.cuenta,
-          accion: 'eliminar',
-          motivo: 'duplicado_exacto',
-          conservarCuentaLocal: conservar.cuentaLocal,
-          explicacion:
-            `La cuenta local ${registro.cuentaLocal} ` +
-            `es exactamente igual a ${conservar.cuentaLocal} ` +
-            `en cuenta, descripción, ACCTYPE, TYPELIM y CONVERSION.`,
-        });
-      }
+    const conservar = vistos.get(key);
+
+    duplicados.push({
+      originalRow: registro.originalRow,
+
+      cuentaLocal: registro.cuentaLocal,
+
+      cuenta: registro.cuenta,
+
+      accion: 'eliminar',
+
+      motivo: 'duplicado_exacto',
+
+      conservarCuentaLocal: conservar.cuentaLocal,
+
+      explicacion:
+        `La fila ${registro.originalRow} es un duplicado exacto ` +
+        `de la fila ${conservar.originalRow}. ` +
+        `Coinciden CUENTA LOCAL, CTA. GRUPO, DESCRIPTION, ` +
+        `ACCTYPE, TYPELIM y CONVERSION.`,
     });
   });
 
   return duplicados;
-}
-
-function eliminarDuplicadosExactos(registros, duplicadosExactos) {
-  const cuentasLocalesAEliminar = new Set(
-    duplicadosExactos.map((duplicate) =>
-      String(duplicate.cuentaLocal ?? '').trim()
-    )
-  );
-
-  return registros.filter(
-    (registro) =>
-      !cuentasLocalesAEliminar.has(String(registro.cuentaLocal ?? '').trim())
-  );
 }
 
 function getAcctypeCode(value) {
@@ -2802,107 +3721,6 @@ function renderPlanIncidents(incidents) {
   `;
 }
 
-function eliminarRegistroPlan(cuentaLocal) {
-  /*
-   * ============================================================
-   * 1. VALIDACIÓN
-   * ============================================================
-   */
-
-  if (!PLAN_RESULT) {
-    console.warn('No existe PLAN_RESULT.');
-
-    return;
-  }
-
-  if (!cuentaLocal) {
-    console.warn('No se recibió cuentaLocal para eliminar.');
-
-    return;
-  }
-
-  /*
-   * ============================================================
-   * 2. BUSCAR REGISTRO
-   * ============================================================
-   */
-
-  const record = (PLAN_RESULT.records || []).find(
-    (item) =>
-      String(item.cuentaLocal ?? '').trim() === String(cuentaLocal).trim()
-  );
-
-  if (!record) {
-    console.warn('No se encontró el registro para eliminar:', cuentaLocal);
-
-    return;
-  }
-
-  /*
-   * ============================================================
-   * 3. CONFIRMACIÓN
-   * ============================================================
-   */
-
-  const confirmar = confirm(
-    `¿Quieres eliminar la cuenta local ${cuentaLocal}?\n\n` +
-      `Cuenta de grupo: ${record.cuenta || '—'}\n` +
-      `Descripción: ${record.descripcion || '—'}`
-  );
-
-  if (!confirmar) {
-    return;
-  }
-
-  /*
-   * ============================================================
-   * 4. ELIMINAR REGISTRO
-   * ============================================================
-   */
-
-  PLAN_RESULT.records = PLAN_RESULT.records.filter(
-    (item) =>
-      String(item.cuentaLocal ?? '').trim() !== String(cuentaLocal).trim()
-  );
-
-  /*
-   * ============================================================
-   * 6. REANALIZAR PLAN
-   * ============================================================
-   *
-   * Esta función:
-   *
-   * - vuelve a ejecutar processPlan()
-   * - detecta nuevos duplicados exactos
-   * - actualiza PLAN_RESULT
-   * - actualiza resumen
-   * - actualiza incidencias
-   * - actualiza botón generar
-   */
-
-  (PLAN_RESULT.records || []).forEach((record) => {
-    const original = cuentasLocalesAntes.get(record.originalRow);
-
-    const actual = String(record.cuentaLocal ?? '').trim();
-
-    if (original !== actual) {
-      console.error('ERROR: cuentaLocal modificada por la IA', {
-        originalRow: record.originalRow,
-        antes: original,
-        despues: actual,
-        record,
-      });
-    }
-  });
-  reanalizarPlanDespuesIA();
-
-  /*
-   * ============================================================
-   * 7. DEBUG RESULTADO
-   * ============================================================
-   */
-}
-
 /* ============================================================
    SUMMARY PLAN
 ============================================================ */
@@ -2919,7 +3737,9 @@ function buildPlanSummary(result) {
   ).size;
 
   const acctype = new Set(
-    result.records.map((r) => normalizeKey(r.acctype)).filter(Boolean)
+    result.records
+      .map((r) => normalizeKey(r.acctype).split(' ')[0])
+      .filter(Boolean)
   ).size;
 
   return {
@@ -2959,209 +3779,6 @@ function renderPlanSummary(summary) {
     </div>
 
   `;
-}
-
-/* ============================================================
-   RENDER INCIDENCIAS PLAN
-============================================================ */
-
-function reanalizarPlanDespuesIA() {
-  /*
-   * ============================================================
-   * 1. VALIDACIÓN
-   * ============================================================
-   */
-
-  if (!PLAN_RESULT) {
-    console.warn('No existe PLAN_RESULT para reanalizar.');
-
-    return {
-      duplicadosExactos: [],
-      hasErrors: false,
-      errors: [],
-      warnings: [],
-    };
-  }
-
-  /*
-   * ============================================================
-   * 2. OBTENER REGISTROS ACTUALES
-   * ============================================================
-   *
-   * Son los registros DESPUÉS de aplicar los cambios de IA.
-   */
-
-  const records = PLAN_RESULT.records || [];
-
-  /*
-   * ============================================================
-   * 3. DETECTAR DUPLICADOS EXACTOS NUEVOS
-   * ============================================================
-   *
-   * IMPORTANTE:
-   *
-   * Aquí NO eliminamos nada.
-   *
-   * Solo los detectamos para mostrarlos al usuario.
-   */
-
-  const duplicadosExactos = detectarDuplicadosExactos(records);
-
-  if (duplicadosExactos.length) {
-    console.table(duplicadosExactos);
-  }
-
-  /*
-   * ============================================================
-   * 4. REVALIDAR CAMPOS
-   * ============================================================
-   */
-
-  const validationResult = processPlan(records);
-
-  /*
-   * ============================================================
-   * 5. INCIDENCIAS DE DUPLICADOS EXACTOS
-   * ============================================================
-   *
-   * Estos duplicados aparecieron DESPUÉS de aplicar IA.
-   *
-   * No se eliminan automáticamente.
-   *
-   * Se muestran como eliminables.
-   */
-
-  const incidentesDuplicados = duplicadosExactos.map((duplicate) => {
-    const registro = records.find(
-      (record) =>
-        String(record.cuentaLocal ?? '').trim() ===
-        String(duplicate.cuentaLocal ?? '').trim()
-    );
-
-    return {
-      severity: 'Warning',
-
-      row: registro?.originalRow ?? '',
-
-      id: duplicate.cuenta,
-
-      cuentaLocal: duplicate.cuentaLocal,
-
-      tipo: 'duplicado_exacto',
-
-      message: duplicate.explicacion,
-
-      removable: true,
-    };
-  });
-
-  /*
-   * ============================================================
-   * 6. CONSERVAR LAS DEMÁS INCIDENCIAS
-   * ============================================================
-   *
-   * processPlan() ya valida:
-   *
-   * - cuenta faltante
-   * - descripción
-   * - ACCTYPE
-   * - cuenta de grupo repetida con diferencias
-   *
-   * Eliminamos únicamente cualquier duplicado exacto
-   * que pudiera haber generado como segunda barrera.
-   */
-
-  const incidentesBase = validationResult.incidents.filter(
-    (incident) => incident.tipo !== 'duplicado_exacto'
-  );
-
-  /*
-   * ============================================================
-   * 7. ACTUALIZAR PLAN_RESULT
-   * ============================================================
-   */
-
-  PLAN_RESULT = {
-    ...validationResult,
-
-    incidents: [...incidentesBase, ...incidentesDuplicados],
-
-    aiSuggestion: PLAN_RESULT.aiSuggestion || [],
-
-    aiIncidents: PLAN_RESULT.aiIncidents || [],
-
-    /*
-     * Duplicados actuales detectados después de IA.
-     */
-
-    aiDuplicates: duplicadosExactos,
-
-    /*
-     * Conservamos los duplicados que fueron eliminados
-     * automáticamente al principio.
-     */
-
-    initialDuplicates: PLAN_RESULT.initialDuplicates || [],
-  };
-
-  /*
-   * ============================================================
-   * 8. CALCULAR RESULTADO
-   * ============================================================
-   */
-
-  const errors = PLAN_RESULT.incidents.filter(
-    (incident) => incident.severity === 'Error'
-  );
-
-  const warnings = PLAN_RESULT.incidents.filter(
-    (incident) => incident.severity === 'Warning'
-  );
-
-  const hasErrors = errors.length > 0;
-
-  /*
-   * ============================================================
-   * 9. ACTUALIZAR RESUMEN
-   * ============================================================
-   */
-
-  const summary = buildPlanSummary(PLAN_RESULT);
-
-  renderPlanSummary(summary);
-
-  /*
-   * ============================================================
-   * 10. ACTUALIZAR INCIDENCIAS
-   * ============================================================
-   */
-
-  renderPlanIncidents(PLAN_RESULT.incidents);
-
-  /*
-   * ============================================================
-   * 11. ACTUALIZAR BOTÓN GENERAR
-   * ============================================================
-   */
-
-  // $('btn-plan-generate').disabled = hasErrors;
-
-  $('plan-gen-status').textContent = hasErrors
-    ? 'Corrige las incidencias antes de generar el archivo.'
-    : 'Validación completada. El archivo está listo para generar.';
-
-  /*
-   * ============================================================
-   * 13. RESULTADO
-   * ============================================================
-   */
-
-  return {
-    duplicadosExactos,
-    hasErrors,
-    errors,
-    warnings,
-  };
 }
 
 /* ============================================================
@@ -3307,74 +3924,122 @@ function processPlan(rows) {
 
   /*
    * ============================================================
-   * 3. CUENTAS DE GRUPO REPETIDAS
+   * 3. ANALIZAR REGISTROS REPETIDOS
    * ============================================================
    *
-   * IMPORTANTE:
+   * Una misma CTA. GRUPO puede estar asociada a varias cuentas
+   * locales.
    *
-   * Una cuenta de grupo repetida NO es automáticamente un error.
+   * Además, una misma CUENTA LOCAL + CTA. GRUPO puede tener
+   * varios ACCTYPE.
    *
-   * Ejemplo válido:
+   * Estos casos son permitidos.
    *
-   * 11100000 → Z11100
-   * 11100001 → Z11100
-   * 11100002 → Z11100
+   * Solo se revisan diferencias relevantes en:
    *
-   * Esta función NO determina aquí si son duplicados exactos.
-   *
-   * Esa comprobación se realiza mediante:
-   *
-   *     detectarDuplicadosExactos()
-   *
-   * antes de IA y después de aplicar IA.
+   *   - TYPELIM
+   *   - CONVERSION
    */
 
-  const accounts = new Map();
+  const accountPairs = new Map();
 
   records.forEach((record) => {
-    const key = normalizeKey(record.cuenta);
+    const cuentaLocal = normalizeKey(record.cuentaLocal);
 
-    if (!key) {
+    const cuentaGrupo = normalizeKey(record.cuenta);
+
+    if (!cuentaLocal || !cuentaGrupo) {
       return;
     }
 
-    if (!accounts.has(key)) {
-      accounts.set(key, []);
+    const key = `${cuentaLocal}|${cuentaGrupo}`;
+
+    if (!accountPairs.has(key)) {
+      accountPairs.set(key, []);
     }
 
-    accounts.get(key).push(record);
+    accountPairs.get(key).push(record);
   });
 
   /*
    * ============================================================
-   * 4. ANALIZAR AGRUPACIONES
+   * 4. ANALIZAR MISMA CUENTA LOCAL + MISMA CTA. GRUPO
    * ============================================================
    */
 
-  accounts.forEach((groupRecords) => {
+  accountPairs.forEach((groupRecords) => {
     /*
-     * Una sola cuenta de grupo:
-     * no hay nada que revisar.
+     * ----------------------------------------------------------
+     * Si solo existe un registro no hay nada que analizar.
+     * ----------------------------------------------------------
      */
 
     if (groupRecords.length < 2) {
       return;
     }
 
+    const primerRegistro = groupRecords[0];
+
     /*
-     * --------------------------------------------------------
-     * COMPROBAR SI EXISTEN DIFERENCIAS
-     * --------------------------------------------------------
+     * ----------------------------------------------------------
+     * VARIOS ACCTYPE
+     * ----------------------------------------------------------
+     *
+     * Una misma cuenta local + cuenta grupo puede tener
+     * diferentes ACCTYPE.
+     *
+     * Esto NO es un error.
+     *
+     * Lo mostramos como Warning informativo.
+     *
+     * Los valores vacíos NO se consideran un ACCTYPE.
      */
 
-    const primerRegistro = groupRecords[0];
+    const acctypes = [
+      ...new Set(
+        groupRecords
+          .map((record) => normalizeAIValue(record.acctype))
+          .filter(Boolean)
+      ),
+    ];
+
+    if (acctypes.length > 1) {
+      incidents.push({
+        severity: 'Warning',
+
+        row: primerRegistro.originalRow,
+
+        id: primerRegistro.cuenta,
+
+        cuentaLocal: primerRegistro.cuentaLocal,
+
+        tipo: 'multiples_acctype',
+
+        message:
+          `La cuenta local "${primerRegistro.cuentaLocal}" ` +
+          `asociada a la cuenta de grupo ` +
+          `"${primerRegistro.cuenta}" ` +
+          `tiene varios ACCTYPE: ` +
+          `${acctypes.join(', ')}.`,
+
+        removable: false,
+      });
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * COMPROBAR DIFERENCIAS RELEVANTES
+     * ----------------------------------------------------------
+     *
+     * ACCTYPE NO se compara aquí.
+     *
+     * DESCRIPTION tampoco se compara.
+     *
+     * Solo TYPELIM y CONVERSION pueden generar este warning.
+     */
 
     const existenDiferencias = groupRecords.some(
       (record) =>
-        normalizeAIValue(record.descripcion) !==
-          normalizeAIValue(primerRegistro.descripcion) ||
-        normalizeAIValue(record.acctype) !==
-          normalizeAIValue(primerRegistro.acctype) ||
         normalizeAIValue(record.typelim) !==
           normalizeAIValue(primerRegistro.typelim) ||
         normalizeAIValue(record.conversion) !==
@@ -3382,14 +4047,9 @@ function processPlan(rows) {
     );
 
     /*
-     * --------------------------------------------------------
-     * DUPLICADOS EXACTOS
-     * --------------------------------------------------------
-     *
-     * NO se generan aquí.
-     *
-     * detectarDuplicadosExactos()
-     * se encarga de ello.
+     * ----------------------------------------------------------
+     * SIN DIFERENCIAS RELEVANTES
+     * ----------------------------------------------------------
      */
 
     if (!existenDiferencias) {
@@ -3397,9 +4057,9 @@ function processPlan(rows) {
     }
 
     /*
-     * --------------------------------------------------------
-     * CUENTA DE GRUPO REPETIDA CON DIFERENCIAS
-     * --------------------------------------------------------
+     * ----------------------------------------------------------
+     * DIFERENCIAS EN TYPELIM / CONVERSION
+     * ----------------------------------------------------------
      */
 
     incidents.push({
@@ -3414,12 +4074,11 @@ function processPlan(rows) {
       tipo: 'cuenta_duplicada',
 
       message:
-        `La cuenta de grupo "${primerRegistro.cuenta}" ` +
-        `está asociada a ` +
-        `${groupRecords.length} cuentas locales ` +
-        `con diferencias entre sus registros. ` +
-        `La agrupación no es necesariamente incorrecta ` +
-        `y no constituye un error bloqueante.`,
+        `La cuenta local "${primerRegistro.cuentaLocal}" ` +
+        `está asociada a la cuenta de grupo ` +
+        `"${primerRegistro.cuenta}" con diferencias ` +
+        `en TYPELIM o CONVERSION. ` +
+        `Revisa la configuración.`,
 
       removable: false,
     });
@@ -3446,7 +4105,7 @@ async function processPlanFile() {
 
   const button = $('btn-plan-process');
 
-  button.disabled = true;
+  button.disabled = false;
 
   setStatus($('plan-file-status'), 'Procesando archivo...');
 
@@ -4331,6 +4990,15 @@ function initPlanFileInput() {
 /* ============================================================
    IA PLAN
 ============================================================ */
+function chunkPlanRecords(records, chunkSize = 150) {
+  const chunks = [];
+
+  for (let i = 0; i < records.length; i += chunkSize) {
+    chunks.push(records.slice(i, i + chunkSize));
+  }
+
+  return chunks;
+}
 
 async function analyzePlanWithAI() {
   const aiResult = $('ai-result-plan');
@@ -4424,12 +5092,25 @@ async function analyzePlanWithAI() {
 
   /*
    * ============================================================
+   * 4. PREPARAR BLOQUES
+   * ============================================================
+   *
+   * Los planes grandes se dividen para evitar enviar
+   * demasiados registros en una única llamada HTTP.
+   */
+
+  const CHUNK_SIZE = 150;
+
+  const chunks = chunkPlanRecords(registros, CHUNK_SIZE);
+
+  /*
+   * ============================================================
    * 5. ESTADO — ANALIZANDO
    * ============================================================
    */
 
   if (btn) {
-    // btn.disabled = true;
+    btn.disabled = true;
 
     btn.innerHTML = `
       <i
@@ -4445,7 +5126,9 @@ async function analyzePlanWithAI() {
     `;
   }
 
-  statusLine.textContent = 'Analizando';
+  statusLine.textContent = `Preparando análisis de ${registros.length.toLocaleString(
+    'es-ES'
+  )} registros…`;
 
   statusLine.classList.remove('ready');
 
@@ -4463,9 +5146,11 @@ async function analyzePlanWithAI() {
           </strong>
 
           <span>
-            La IA está revisando
+            La IA revisará
             ${registros.length.toLocaleString('es-ES')}
-            registros…
+            registros en
+            ${chunks.length.toLocaleString('es-ES')}
+            bloque(s)…
           </span>
 
         </div>
@@ -4487,78 +5172,187 @@ async function analyzePlanWithAI() {
   try {
     /*
      * ==========================================================
-     * 7. LLAMADA A LA IA
+     * 7. ACUMULADORES
      * ==========================================================
      */
 
-    const response = await fetch(FLOW_URL, {
-      method: 'POST',
+    const allSuggestions = [];
 
-      headers: {
-        'Content-Type': 'application/json',
-      },
-
-      body: JSON.stringify({
-        registros,
-      }),
-    });
+    const allIncidents = [];
 
     /*
      * ==========================================================
-     * 8. VALIDAR HTTP
+     * 8. PROCESAR BLOQUES
      * ==========================================================
      */
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
 
-      throw new Error(`Error HTTP ${response.status}: ${errorText}`);
+      /*
+       * --------------------------------------------------------
+       * ACTUALIZAR ESTADO
+       * --------------------------------------------------------
+       */
+
+      const processedBefore = chunks
+        .slice(0, i)
+        .reduce((total, currentChunk) => total + currentChunk.length, 0);
+
+      const processedAfter = processedBefore + chunk.length;
+
+      statusLine.textContent =
+        `Analizando bloque ${i + 1} de ${chunks.length} · ` +
+        `${processedBefore.toLocaleString('es-ES')}–` +
+        `${processedAfter.toLocaleString('es-ES')} de ` +
+        `${registros.length.toLocaleString('es-ES')} registros…`;
+
+      /*
+       * --------------------------------------------------------
+       * ACTUALIZAR MENSAJE VISUAL
+       * --------------------------------------------------------
+       */
+
+      aiResult.innerHTML = `
+        <div class="ai-analysis-summary">
+
+          <div class="ai-summary-main">
+
+            <i class="ti ti-sparkles"></i>
+
+            <div>
+
+              <strong>
+                Analizando plan de cuentas
+              </strong>
+
+              <span>
+                Bloque
+                ${i + 1}
+                de
+                ${chunks.length}
+                ·
+                ${processedBefore.toLocaleString('es-ES')}
+                –
+                ${processedAfter.toLocaleString('es-ES')}
+                de
+                ${registros.length.toLocaleString('es-ES')}
+                registros
+              </span>
+
+            </div>
+
+          </div>
+
+        </div>
+      `;
+
+      /*
+       * --------------------------------------------------------
+       * LLAMADA HTTP
+       * --------------------------------------------------------
+       */
+
+      const response = await fetch(FLOW_URL, {
+        method: 'POST',
+
+        headers: {
+          'Content-Type': 'application/json',
+        },
+
+        body: JSON.stringify({
+          registros: chunk,
+        }),
+      });
+
+      /*
+       * --------------------------------------------------------
+       * VALIDAR HTTP
+       * --------------------------------------------------------
+       */
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        throw new Error(
+          `Error HTTP ${response.status} en el bloque ` +
+            `${i + 1} de ${chunks.length}: ${errorText}`
+        );
+      }
+
+      /*
+       * --------------------------------------------------------
+       * LEER RESPUESTA
+       * --------------------------------------------------------
+       */
+
+      const aiResponse = await response.json();
+
+      /*
+       * --------------------------------------------------------
+       * VALIDAR RESPUESTA IA
+       * --------------------------------------------------------
+       */
+
+      if (!aiResponse || typeof aiResponse !== 'object') {
+        throw new Error(
+          `La IA no devolvió una respuesta JSON válida ` +
+            `en el bloque ${i + 1} de ${chunks.length}.`
+        );
+      }
+
+      /*
+       * --------------------------------------------------------
+       * OBTENER SUGERENCIAS
+       * --------------------------------------------------------
+       */
+
+      const suggestions = Array.isArray(aiResponse.registros)
+        ? aiResponse.registros
+        : [];
+      suggestions.forEach((suggestion) => {
+        delete suggestion.parentId;
+        delete suggestion.padre;
+        delete suggestion.padre_sugerido;
+        delete suggestion.nivel;
+        delete suggestion.nivel_sugerido;
+        delete suggestion.tipo;
+        delete suggestion.tipo_sugerido;
+      });
+      /*
+       * --------------------------------------------------------
+       * OBTENER INCIDENCIAS
+       * --------------------------------------------------------
+       */
+
+      const incidents = Array.isArray(aiResponse.incidencias)
+        ? aiResponse.incidencias
+        : [];
+
+      /*
+       * --------------------------------------------------------
+       * ACUMULAR
+       * --------------------------------------------------------
+       */
+
+      allSuggestions.push(...suggestions);
+
+      allIncidents.push(...incidents);
     }
 
     /*
      * ==========================================================
-     * 9. LEER RESPUESTA
+     * 9. RESULTADO COMPLETO
      * ==========================================================
      */
 
-    const aiResponse = await response.json();
+    const suggestions = allSuggestions;
+
+    const incidents = allIncidents;
 
     /*
      * ==========================================================
-     * 10. VALIDAR RESPUESTA IA
-     * ==========================================================
-     */
-
-    if (!aiResponse || typeof aiResponse !== 'object') {
-      throw new Error('La IA no devolvió una respuesta JSON válida.');
-    }
-
-    /*
-     * ==========================================================
-     * 11. OBTENER RESULTADOS
-     * ==========================================================
-     */
-
-    const suggestions = Array.isArray(aiResponse.registros)
-      ? aiResponse.registros
-      : [];
-
-    const incidents = Array.isArray(aiResponse.incidencias)
-      ? aiResponse.incidencias
-      : [];
-
-    /*
-     * ==========================================================
-     * 12. VALIDAR IDENTIFICADORES DEVUELTOS
-     * ==========================================================
-     *
-     * originalRow debe corresponder a una fila que realmente
-     * fue enviada a la IA.
-     */
-
-    /*
-     * ==========================================================
-     * 14. DETECTAR CAMBIOS REALES
+     * 10. DETECTAR CAMBIOS REALES
      * ==========================================================
      */
 
@@ -4590,7 +5384,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 15. GUARDAR RESULTADOS
+     * 11. GUARDAR RESULTADOS
      * ==========================================================
      */
 
@@ -4600,7 +5394,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 17. CONSTRUIR HTML
+     * 12. CONSTRUIR HTML
      * ==========================================================
      */
 
@@ -4643,7 +5437,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 18. CAMBIOS PROPUESTOS
+     * 13. CAMBIOS PROPUESTOS
      * ==========================================================
      */
 
@@ -4699,30 +5493,30 @@ async function analyzePlanWithAI() {
               normalizeAIValue(suggestion.descripcion_original)
           ) {
             cambios.push(`
-                  <div class="ai-field-change">
+              <div class="ai-field-change">
 
-                    <strong>
-                      Descripción
-                    </strong>
+                <strong>
+                  Descripción
+                </strong>
 
-                    <div class="ai-field-values">
+                <div class="ai-field-values">
 
-                      <span class="ai-old-value">
-                        ${escapeHtml(suggestion.descripcion_original || '—')}
-                      </span>
+                  <span class="ai-old-value">
+                    ${escapeHtml(suggestion.descripcion_original || '—')}
+                  </span>
 
-                      <span class="ai-arrow">
-                        →
-                      </span>
+                  <span class="ai-arrow">
+                    →
+                  </span>
 
-                      <span class="ai-new-value">
-                        ${escapeHtml(suggestion.descripcion_sugerida || '—')}
-                      </span>
+                  <span class="ai-new-value">
+                    ${escapeHtml(suggestion.descripcion_sugerida || '—')}
+                  </span>
 
-                    </div>
+                </div>
 
-                  </div>
-                `);
+              </div>
+            `);
           }
 
           /*
@@ -4737,30 +5531,30 @@ async function analyzePlanWithAI() {
               normalizeAIValue(suggestion.acctype_original)
           ) {
             cambios.push(`
-                  <div class="ai-field-change">
+              <div class="ai-field-change">
 
-                    <strong>
-                      ACCTYPE
-                    </strong>
+                <strong>
+                  ACCTYPE
+                </strong>
 
-                    <div class="ai-field-values">
+                <div class="ai-field-values">
 
-                      <span class="ai-old-value">
-                        ${escapeHtml(suggestion.acctype_original || '—')}
-                      </span>
+                  <span class="ai-old-value">
+                    ${escapeHtml(suggestion.acctype_original || '—')}
+                  </span>
 
-                      <span class="ai-arrow">
-                        →
-                      </span>
+                  <span class="ai-arrow">
+                    →
+                  </span>
 
-                      <span class="ai-new-value">
-                        ${escapeHtml(suggestion.acctype_sugerido || '—')}
-                      </span>
+                  <span class="ai-new-value">
+                    ${escapeHtml(suggestion.acctype_sugerido || '—')}
+                  </span>
 
-                    </div>
+                </div>
 
-                  </div>
-                `);
+              </div>
+            `);
           }
 
           /*
@@ -4775,30 +5569,30 @@ async function analyzePlanWithAI() {
               normalizeAIValue(suggestion.typelim_original)
           ) {
             cambios.push(`
-                  <div class="ai-field-change">
+              <div class="ai-field-change">
 
-                    <strong>
-                      TYPELIM
-                    </strong>
+                <strong>
+                  TYPELIM
+                </strong>
 
-                    <div class="ai-field-values">
+                <div class="ai-field-values">
 
-                      <span class="ai-old-value">
-                        ${escapeHtml(suggestion.typelim_original || '—')}
-                      </span>
+                  <span class="ai-old-value">
+                    ${escapeHtml(suggestion.typelim_original || '—')}
+                  </span>
 
-                      <span class="ai-arrow">
-                        →
-                      </span>
+                  <span class="ai-arrow">
+                    →
+                  </span>
 
-                      <span class="ai-new-value">
-                        ${escapeHtml(suggestion.typelim_sugerido || '—')}
-                      </span>
+                  <span class="ai-new-value">
+                    ${escapeHtml(suggestion.typelim_sugerido || '—')}
+                  </span>
 
-                    </div>
+                </div>
 
-                  </div>
-                `);
+              </div>
+            `);
           }
 
           /*
@@ -4813,30 +5607,30 @@ async function analyzePlanWithAI() {
               normalizeAIValue(suggestion.conversion_original)
           ) {
             cambios.push(`
-                  <div class="ai-field-change">
+              <div class="ai-field-change">
 
-                    <strong>
-                      CONVERSION
-                    </strong>
+                <strong>
+                  CONVERSION
+                </strong>
 
-                    <div class="ai-field-values">
+                <div class="ai-field-values">
 
-                      <span class="ai-old-value">
-                        ${escapeHtml(suggestion.conversion_original || '—')}
-                      </span>
+                  <span class="ai-old-value">
+                    ${escapeHtml(suggestion.conversion_original || '—')}
+                  </span>
 
-                      <span class="ai-arrow">
-                        →
-                      </span>
+                  <span class="ai-arrow">
+                    →
+                  </span>
 
-                      <span class="ai-new-value">
-                        ${escapeHtml(suggestion.conversion_sugerida || '—')}
-                      </span>
+                  <span class="ai-new-value">
+                    ${escapeHtml(suggestion.conversion_sugerida || '—')}
+                  </span>
 
-                    </div>
+                </div>
 
-                  </div>
-                `);
+              </div>
+            `);
           }
 
           /*
@@ -4846,81 +5640,81 @@ async function analyzePlanWithAI() {
            */
 
           return `
-                <tr>
+            <tr>
 
-                  <td
-                    style="
-                      text-align:center;
-                    "
-                  >
+              <td
+                style="
+                  text-align:center;
+                "
+              >
 
-                    <input
-                      type="checkbox"
-                      class="ai-change-checkbox"
-                      data-ai-index="${index}"
-                      checked
-                    />
+                <input
+                  type="checkbox"
+                  class="ai-change-checkbox"
+                  data-ai-index="${index}"
+                  checked
+                />
 
-                  </td>
+              </td>
 
-                  <td>
+              <td>
 
-                    <strong>
-                      ${escapeHtml(suggestion.cuenta || 'Sin cuenta')}
-                    </strong>
+                <strong>
+                  ${escapeHtml(suggestion.cuenta || 'Sin cuenta')}
+                </strong>
 
-                    ${
-                      suggestion.cuentaLocal
-                        ? `
-                          <div
-                            style="
-                              font-size:12px;
-                              color:#64748b;
-                              margin-top:3px;
-                            "
-                          >
-                            Local:
-                            ${escapeHtml(suggestion.cuentaLocal)}
-                          </div>
-                        `
-                        : ''
-                    }
+                ${
+                  suggestion.cuentaLocal
+                    ? `
+                      <div
+                        style="
+                          font-size:12px;
+                          color:#64748b;
+                          margin-top:3px;
+                        "
+                      >
+                        Local:
+                        ${escapeHtml(suggestion.cuentaLocal)}
+                      </div>
+                    `
+                    : ''
+                }
 
-                    <div
-                      style="
-                        font-size:11px;
-                        color:#94a3b8;
-                        margin-top:2px;
-                      "
-                    >
-                      Fila:
-                      ${escapeHtml(String(suggestion.originalRow))}
-                    </div>
+                <div
+                  style="
+                    font-size:11px;
+                    color:#94a3b8;
+                    margin-top:2px;
+                  "
+                >
+                  Fila:
+                  ${escapeHtml(String(suggestion.originalRow))}
+                </div>
 
-                  </td>
+              </td>
 
-                  <td>
+              <td>
 
-                    ${cambios.join('')}
+                ${cambios.join('')}
 
-                    ${
-                      suggestion.explicacion
-                        ? `
-                          <div class="ai-row-explanation">
+                ${
+                  suggestion.explicacion
+                    ? `
+                      <div class="ai-row-explanation">
 
-                            <i class="ti ti-bulb"></i>
+                        <i class="ti ti-bulb"></i>
 
-                            ${escapeHtml(suggestion.explicacion)}
+                        ${escapeHtml(suggestion.explicacion)}
 
-                          </div>
-                        `
-                        : ''
-                    }
+                      </div>
+                    `
+                    : ''
+                }
 
-                  </td>
+              </td>
 
-                </tr>
-              `;
+            </tr>
+          `;
         })
         .join('');
 
@@ -4935,7 +5729,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 19. INCIDENCIAS IA
+     * 14. INCIDENCIAS IA
      * ==========================================================
      */
 
@@ -4976,7 +5770,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 20. SIN CAMBIOS NI INCIDENCIAS
+     * 15. SIN CAMBIOS NI INCIDENCIAS
      * ==========================================================
      */
 
@@ -5010,7 +5804,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 21. BOTÓN APLICAR
+     * 16. BOTÓN APLICAR
      * ==========================================================
      */
 
@@ -5036,7 +5830,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 22. MOSTRAR RESULTADO
+     * 17. MOSTRAR RESULTADO
      * ==========================================================
      */
 
@@ -5044,7 +5838,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 23. CONECTAR BOTÓN APLICAR
+     * 18. CONECTAR BOTÓN APLICAR
      * ==========================================================
      */
 
@@ -5055,17 +5849,17 @@ async function analyzePlanWithAI() {
         btnApplyAI.disabled = true;
 
         btnApplyAI.innerHTML = `
-            <i
-              class="ti ti-loader-2"
-              style="
-                font-size:15px;
-                vertical-align:-2px;
-                margin-right:4px;
-              "
-            ></i>
+          <i
+            class="ti ti-loader-2"
+            style="
+              font-size:15px;
+              vertical-align:-2px;
+              margin-right:4px;
+            "
+          ></i>
 
-            Aplicando cambios…
-          `;
+          Aplicando cambios…
+        `;
 
         try {
           const cambiosAplicados = await applyAISuggestionsPlan();
@@ -5075,20 +5869,20 @@ async function analyzePlanWithAI() {
           statusLine.classList.add('ready');
 
           btnApplyAI.innerHTML = `
-              <i class="ti ti-check"></i>
+            <i class="ti ti-check"></i>
 
-              Cambios aplicados
-            `;
+            Cambios aplicados
+          `;
         } catch (error) {
           console.error('Error aplicando cambios IA:', error);
 
           btnApplyAI.disabled = false;
 
           btnApplyAI.innerHTML = `
-              <i class="ti ti-check"></i>
+            <i class="ti ti-check"></i>
 
-              Aplicar cambios seleccionados
-            `;
+            Aplicar cambios seleccionados
+          `;
 
           statusLine.textContent = 'No se pudieron aplicar los cambios.';
 
@@ -5099,7 +5893,7 @@ async function analyzePlanWithAI() {
 
     /*
      * ==========================================================
-     * 24. ESTADO FINAL
+     * 19. ESTADO FINAL
      * ==========================================================
      */
 
@@ -5479,7 +6273,7 @@ async function applyAISuggestionsPlan() {
    * ============================================================
    */
 
-  // $('btn-plan-generate').disabled = hasErrors;
+  $('btn-plan-generate').disabled = hasErrors;
 
   /*
    * ============================================================
@@ -5620,7 +6414,7 @@ function initParameterValidation() {
         hide($('plan-step3'));
         hide($('plan-step4'));
 
-       // $('btn-plan-generate').disabled = true;
+        $('btn-plan-generate').disabled = true;
       }
     });
   });
@@ -5636,14 +6430,25 @@ function eliminarDuplicadosExactosDePlan() {
     return 0;
   }
 
-  const cuentasAEliminar = new Set(
-    duplicados.map((item) => String(item.cuentaLocal ?? '').trim())
+  /*
+   * ============================================================
+   * ELIMINAR ÚNICAMENTE LAS FILAS MARCADAS COMO DUPLICADAS
+   * ============================================================
+   *
+   * No utilizamos cuentaLocal como clave porque una misma
+   * cuenta local puede tener varios registros válidos.
+   */
+
+  const filasAEliminar = new Set(
+    duplicados
+      .map((item) => item.originalRow)
+      .filter((row) => row !== undefined && row !== null)
   );
 
   const antes = PLAN_RESULT.records.length;
 
   PLAN_RESULT.records = PLAN_RESULT.records.filter(
-    (record) => !cuentasAEliminar.has(String(record.cuentaLocal ?? '').trim())
+    (record) => !filasAEliminar.has(record.originalRow)
   );
 
   const eliminados = antes - PLAN_RESULT.records.length;
@@ -5667,7 +6472,7 @@ function resetHierarchy() {
   hide($('step3'));
   hide($('step4'));
 
- // $('btn-process').disabled = true;
+  $('btn-process').disabled = true;
   $('btn-generate').disabled = false;
 
   $('summary-bar').innerHTML = '';
@@ -5690,8 +6495,8 @@ function resetPlan() {
   hide($('plan-step3'));
   hide($('plan-step4'));
 
-  // $('btn-plan-process').disabled = true;
-  // $('btn-plan-generate').disabled = true;
+  $('btn-plan-process').disabled = true;
+  $('btn-plan-generate').disabled = true;
 
   $('plan-summary-bar').innerHTML = '';
   $('plan-incidencias-table').innerHTML = '';
