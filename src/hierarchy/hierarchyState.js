@@ -5,6 +5,7 @@
 let RAW_DATA = [];
 let CUENTAS_MAP = new Map();
 let CURRENT_FILE = null;
+let RESULT = null;
 
 
 /* ============================================================
@@ -54,4 +55,17 @@ export function resetHierarchyState() {
   RAW_DATA = [];
   CUENTAS_MAP = new Map();
   CURRENT_FILE = null;
+  RESULT = null;
 }
+
+/* ============================================================
+   RESULTADO
+============================================================ */
+
+export function getResult() {
+    return RESULT;
+  }
+  
+  export function setResult(result) {
+    RESULT = result;
+  }
